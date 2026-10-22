@@ -139,8 +139,9 @@ def analyze(pid: str, expect: str) -> dict:
 
 def verdict(m: dict) -> str:
     exp = m["expect"]
-    # pohuy грузится всегда по инструкции владельца: это фон, а не выбор скилла
-    got = [s for s in m["skills"] if s != "pohuy"]
+    # скиллы, загружаемые всегда (фон, а не выбор) - не считаются выбором агента
+    always = os.environ.get("SG_ALWAYS_SKILLS", "").split(",")
+    got = [s for s in m["skills"] if s not in always and s]
     if exp == "-":
         return "ok: профильный скилл не нужен и не взят" if not got else f"шум: взял {got[0]}"
     if any(e in got for e in exp.split("|")):
@@ -170,7 +171,8 @@ def main() -> None:
     for m in out:
         s = m["statuses"]
         adv = "; ".join(n["severity"] for n in m["advisor"]) or "—"
-        skills = ", ".join(s_ for s_ in m["skills"] if s_ != "pohuy") or "—"
+        always = os.environ.get("SG_ALWAYS_SKILLS", "").split(",")
+        skills = ", ".join(s_ for s_ in m["skills"] if s_ not in always and s_) or "—"
         print(
             f"| {m['id'][:2]} | {m['id'][3:]} | {m['expect']} | {skills} | {verdict(m)} | "
             f"{m['turns']} | {m['blocks']} | {s['сделано']}/{s['неприменимо']}/{s['не сделано']} | {adv} | ${m['cost']:.4f} |"

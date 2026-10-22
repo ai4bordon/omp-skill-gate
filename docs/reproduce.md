@@ -29,7 +29,7 @@ bun ref-check.ts          # синтетика 2/2 + реальные скилл
 
 Все пробы гоняют расширение через фейковый `pi`: события input, tool_call,
 tool_result, message_update, session_stop. Никакой сети, никакой модели.
-Кейсы с локальными скиллами (obligations 10-11, ref-check «pohuy/spec-driven»)
+Кейсы с локальными скиллами (obligations 10-11, ref-check «code-review/spec-driven»)
 проверяются только если скиллы установлены в `~/.agents/skills`, иначе печатается
 «пропущено» и счётчик их не включает.
 

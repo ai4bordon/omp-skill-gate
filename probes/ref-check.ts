@@ -38,7 +38,7 @@ async function openSkill(path: string, file: string, text: string): Promise<stri
 
 // Синтетика: работает на любой машине
 const SYNTH_BODY = `# Демо\n\n## Process\n1. Собрать референсы\n2. Выбрать палитру\n3. Собрать макет\n`;
-const SYNTH_REF = `# Глоссарий\n\n## Шкала\n- Триумф: всё получилось\n- Возня: копается\n`;
+const SYNTH_REF = `# Глоссарий\n\n## Термины\n- Этап 1: подготовка завершена\n- Этап 2: идёт отладка\n`;
 
 // Реальные скиллы: только если установлены локально
 const realDir = join(homedir(), ".agents/skills");
@@ -65,8 +65,8 @@ let total = 0;
 }
 
 const realCases: Array<[string, string, string, boolean]> = [
-  ["тело pohuy", "skill://pohuy", join(realDir, "pohuy/SKILL.md"), false],
-  ["справка pohuy", "skill://pohuy/references/sceny.md", join(realDir, "pohuy/references/sceny.md"), false],
+  ["тело code-review", "skill://code-review", join(realDir, "code-review/SKILL.md"), true],
+  ["справка code-review (evals.json)", "skill://code-review/references/cheatsheet.md", join(realDir, "code-review/references/evals.json"), false],
   ["тело spec-driven", "skill://spec-driven-development", join(realDir, "spec-driven-development/SKILL.md"), true],
 ];
 
