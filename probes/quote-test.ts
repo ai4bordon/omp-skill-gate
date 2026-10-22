@@ -1,15 +1,13 @@
 /**
  * quote-test — проба правила «цитата без метки»: фрагмент в кавычках принимается,
  * если он реально был в выводе инструмента; выдуманный — нет.
- *
- *   bun probes/quote-test.ts [путь-к-расширению]
  */
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
-const EXT = process.argv[2] ?? join(import.meta.dir, "../src/skill-gate.ts");
+const EXT = "C:/Users/Kerry/.omp/profiles/aggg5/agent/extensions/skill-gate.ts";
 
 const SKILL = `# Демо
 
@@ -18,21 +16,15 @@ const SKILL = `# Демо
 - [ ] Пункт второй: зелёный тест
 `;
 
-type Pi = {
-  on: (ev: string, fn: (e: unknown, c: unknown) => unknown) => void;
-  registerCommand: () => void;
-};
-type Handler = (e: unknown, c: unknown) => unknown;
-
 async function boot() {
   const work = mkdtempSync(join(tmpdir(), "quote-"));
   const modPath = join(work, "m.ts");
   writeFileSync(modPath, readFileSync(EXT, "utf8"));
-  const mod = (await import(pathToFileURL(modPath).href)) as { default: (pi: Pi) => void };
-  const handlers: Record<string, Handler> = {};
+  const mod = (await import(pathToFileURL(modPath).href)) as { default: (pi: unknown) => void };
+  const handlers: Record<string, any> = {};
   const ctx = { agent: { kind: "main" }, ui: { notify: () => {} } };
   mod.default({
-    on: (e, fn) => { handlers[e] = fn; },
+    on: (e: string, fn: any) => { handlers[e] = fn; },
     registerCommand: () => {},
   });
   return { handlers, ctx };
@@ -68,7 +60,7 @@ async function scenario(name: string, evidence: string, expectBlock: boolean) {
     say(`- сделано: o1 — доказательство: ${evidence}\n- сделано: o2 — доказательство: \`Export named 'mul' not found\``),
     ctx,
   );
-  const stop = (await handlers["session_stop"]({}, ctx)) as { decision?: string; reason?: string } | undefined;
+  const stop: any = await handlers["session_stop"]({}, ctx);
   const blocked = stop?.decision === "block";
   const ok = blocked === expectBlock;
   if (ok) pass++;

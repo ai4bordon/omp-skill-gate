@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
-const EXT = process.argv[2] ?? join(import.meta.dir, "../src/skill-gate.ts");
+const EXT = "C:/Users/Kerry/.omp/profiles/aggg5/agent/extensions/skill-gate.ts";
 
 type Handler = (event: unknown, ctx: unknown) => unknown;
 type Harness = {

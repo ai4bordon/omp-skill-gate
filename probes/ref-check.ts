@@ -1,56 +1,55 @@
-/**
- * ref-check — тело скилла несёт обязательства, references/ — нет.
- * Запускается на локальных SKILL.md; в CI-подобном прогоне необязателен.
- *
- *   bun probes/ref-check.ts [путь-к-расширению]
- */
+// Проверяет: тело SKILL.md даёт обязательства, references/ — нет.
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 
-const EXT = process.argv[2] ?? join(import.meta.dir, "../src/skill-gate.ts");
-type Pi = { on: (ev: string, fn: (e: unknown, c: unknown) => unknown) => void; registerCommand: () => void };
-type Handler = (e: unknown, c: unknown) => unknown;
-const mod = (await import(pathToFileURL(EXT).href)) as { default: (pi: Pi) => void };
-const handlers: Record<string, Handler> = {};
-mod.default({ on: (ev, fn) => { handlers[ev] = fn; }, registerCommand: () => {} });
-const ctx: unknown = { agent: { kind: "main" }, ui: { notify: () => {} } };
-await handlers["input"]({}, ctx);
+const EXT = "C:/Users/Kerry/.omp/profiles/aggg5/agent/extensions/skill-gate.ts";
 
-const read = (path: string, text: string) => ({
-  toolName: "read", isError: false, input: { path },
-  content: [{ type: "text", text: `[Skill file: ${path}]\n${text}` }],
-});
-const count = async (path: string, text: string): Promise<number> => {
-  const res = (await handlers["tool_result"](read(path, text), ctx)) as { additionalContext?: string } | undefined;
-  return (res?.additionalContext ?? "").match(/\[o\d\]/g)?.length ?? 0;
+const handlers = new Map<string, (e: any, c: any) => unknown>();
+const notes: string[] = [];
+const contexts: string[] = [];
+const pi: any = {
+  on: (name: string, fn: any) => handlers.set(name, fn),
+  ui: { notify: (m: string) => notes.push(m) },
+  log: () => {},
+  registerCommand: () => {},
 };
+const mod: any = await import("file:///" + EXT);
+mod.default(pi);
 
-// демонстрация на синтетических текстах: воспроизводимо без личных скиллов
-const BODY = `# Демо
+const ctx = { agent: { kind: "main" }, ui: { notify: (m: string) => notes.push(m) } };
 
-## Process
-1. Собрать референсы
-2. Выбрать палитру
-3. Собрать макет
-`;
-const REF = `# Глоссарий
+async function openSkill(path: string, file: string) {
+  const body = readFileSync(file, "utf-8");
+  const res: any = await handlers.get("tool_result")!(
+    {
+      toolName: "read",
+      isError: false,
+      input: { path },
+      content: [{ type: "text", text: `[Skill file: ${file}]\n\n` + body }],
+    },
+    ctx,
+  );
+  return res?.additionalContext ?? "";
+}
 
-## Шкала состояний
-- Триумф: всё получилось
-- Норма: работает
-- Возня: копается
-`;
+const cases: Array<[string, string, string, boolean]> = [
+  ["тело pohuy", "skill://pohuy", "C:/Users/Kerry/.agents/skills/pohuy/SKILL.md", false],
+  ["справка pohuy", "skill://pohuy/references/sceny.md", "C:/Users/Kerry/.agents/skills/pohuy/references/sceny.md", false],
+  ["тело spec-driven", "skill://spec-driven-development", "C:/Users/Kerry/.agents/skills/spec-driven-development/SKILL.md", true],
+];
 
 let pass = 0;
-let total = 0;
-const cases: Array<[string, number]> = [
-  ["тело скилла (Process)", await count("skill://demo", BODY)],
-  ["references/ глоссарий", await count("skill://demo/references/glossary.md", REF)],
-];
-for (const [name, n] of cases) total++;
-if (cases[0][1] >= 3) pass++; else console.log(`FAIL: тело дало ${cases[0][1]} обязательств, ждали >= 3`);
-if (cases[1][1] === 0) pass++; else console.log(`FAIL: references дал ${cases[1][1]} обязательств, ждали 0`);
-console.log(`тело скилла: ${cases[0][1]} обязательств (ждали >=3)`);
-console.log(`references/: ${cases[1][1]} обязательств (ждали 0)`);
-console.log(`${pass}/${total}`);
+for (const [name, uri, file, expectOblig] of cases) {
+  let out = "";
+  try {
+    out = await openSkill(uri, file);
+  } catch (e) {
+    console.log(`FAIL ${name}: упало ${(e as Error).message}`);
+    continue;
+  }
+  const has = out.includes("несёт обязательства");
+  const ok = has === expectOblig;
+  if (ok) pass++;
+  const count = /\((\d+)\)/.exec(out)?.[1] ?? "0";
+  console.log(`${ok ? "ok  " : "FAIL"} ${name}: обязательств ${count}, ждали ${expectOblig ? ">0" : "0"}`);
+}
+console.log(`\n${pass}/${cases.length}`);
