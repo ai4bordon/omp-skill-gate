@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path(r"C:/Users/Kerry/tmp/skillbench")
+ROOT = Path(__file__).resolve().parent
 
 
 def wipe(path: Path) -> list[str]:

@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(r"C:/Users/Kerry/tmp/skillbench")
+ROOT = Path(__file__).resolve().parent
 
 
 def load(tag: str) -> dict[str, dict]:

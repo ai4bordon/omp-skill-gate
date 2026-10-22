@@ -1,7 +1,7 @@
 """Готовит посадочные каталоги и файлы для каждого промпта стенда."""
 from pathlib import Path
 
-ROOT = Path(r"C:/Users/Kerry/tmp/skillbench")
+ROOT = Path(__file__).resolve().parent
 
 FILES = {
     "01-code-tdd/calc.js": """export function add(a, b) { return a + b; }

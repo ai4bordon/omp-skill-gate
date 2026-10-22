@@ -4,13 +4,14 @@
     python parse.py pass1      # сохранённый проход
 """
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
-ROOT = Path(r"C:/Users/Kerry/tmp/skillbench")
+ROOT = Path(__file__).resolve().parent
 RESULTS = ROOT / (sys.argv[1] if len(sys.argv) > 1 else "results")
-SESSIONS = Path(r"C:/Users/Kerry/.omp/profiles/aggg5/agent/sessions")
+SESSIONS = Path(os.environ.get("SG_SESSIONS", str(Path.home() / ".omp/profiles/aggg5/agent/sessions")))
 
 SKILL_RE = re.compile(r"skill://([A-Za-z0-9._-]+)")
 # Та же форма, что в skill-gate.ts: маркер списка, необязательное имя скилла перед [oN]

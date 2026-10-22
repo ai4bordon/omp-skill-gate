@@ -4,12 +4,13 @@
     python from_journal.py 11-1 pass2
 """
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
-SESSIONS = Path(r"C:/Users/Kerry/.omp/profiles/aggg5/agent/sessions")
-ROOT = Path(r"C:/Users/Kerry/tmp/skillbench")
+SESSIONS = Path(os.environ.get("SG_SESSIONS", str(Path.home() / ".omp/profiles/aggg5/agent/sessions")))
+ROOT = Path(__file__).resolve().parent
 SKILL_RE = re.compile(r"skill://([A-Za-z0-9._-]+)")
 STATUS_RE = re.compile(
     r"(?:^|\n)[ \t]*(?:[-*+][ \t]+)?(сделано|неприменимо|не сделано)\s*:\s*"
