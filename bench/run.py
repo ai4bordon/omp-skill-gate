@@ -5,8 +5,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-ROOT = Path(r"C:/Users/user/tmp/skillbench")
-OMP = r"C:\Users\user\.bun\bin\omp.exe"
+ROOT = Path(__file__).resolve().parent
+OMP = os.environ.get("SG_OMP", "omp")
 RESULTS = ROOT / "results"
 TIMEOUT = 1200
 WORKERS = 5
