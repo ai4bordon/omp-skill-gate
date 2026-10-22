@@ -4,7 +4,9 @@
 // шаги. Каждый пункт обязан получить статус с доказательством, которое проверяется по журналу хода.
 // Домен не важен: код, дизайн, ресёрч, тексты — механизм один и тот же.
 // Спека: .kiro/specs/skill-gate-obligations/.
-import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // ---- конфиг (NFR-2: одно место) ----
 const GATED_TOOLS: Record<string, true> = {
@@ -12,6 +14,23 @@ const GATED_TOOLS: Record<string, true> = {
   read: true, grep: true, glob: true, find: true,
   bash: true, eval: true, web_search: true, task: true,
 };
+// Фоновые скиллы: грузятся всегда по инструкции профиля, это не выбор агента.
+// Список живёт в skill-gate.background.json рядом с расширением (одна строка на профиль);
+// при его отсутствии фоновых скиллов нет. Открытие только фонового скилла не вымывает ход (FR-2).
+const BACKGROUND_SKILLS: Record<string, true> = (() => {
+  try {
+    const raw = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "skill-gate.background.json"),
+      "utf-8",
+    );
+    const list: unknown = JSON.parse(raw);
+    const out: Record<string, true> = {};
+    if (Array.isArray(list)) for (const s of list) if (typeof s === "string" && s) out[s] = true;
+    return out;
+  } catch {
+    return {};
+  }
+})();
 const MCP_PREFIX = "mcp__";
 // Внутренние схемы: правки по ним гейтом не считаются (FR-6)
 const INTERNAL_SCHEME = /^(xd|local|agent|mcp|proc|skill|omp|ssh|issue|pr|cfg|security|history|artifact|db)[\w.-]*:/i;
@@ -345,7 +364,9 @@ export default function skillGate(pi: ExtensionAPI): void {
     if (typeof p === "string" && p.startsWith("skill://")) {
       const name = p.slice("skill://".length).split(/[/?#]/)[0];
       if (name && !openSkills.includes(name)) openSkills.push(name);
-      dirty = false;
+      // Фоновый скилл открывается всегда, он не выбор: ход остаётся dirty,
+      // пока агент не откроет профильный скилл или не задекларирует «скиллов нет».
+      if (!BACKGROUND_SKILLS[name]) dirty = false;
       // Обязательства берём только из тела самого скилла.
       // Файл references/ это справка: его оглавление не работа, а описание.
       const isSkillBody = /^skill:\/\/[^/?#]+(?:[/\\]SKILL\.md)?$/i.test(p);
