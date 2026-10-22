@@ -13,6 +13,8 @@
 
 ```bash
 cp src/skill-gate.ts ~/.omp/profiles/<ваш-профиль>/agent/extensions/
+# фоновые скиллы профиля (загружаемые всегда), если есть:
+echo '["имя-скилла"]' > ~/.omp/profiles/<ваш-профиль>/agent/extensions/skill-gate.background.json
 ```
 
 Начните новую сессию OMP: расширения подхватываются при старте.
