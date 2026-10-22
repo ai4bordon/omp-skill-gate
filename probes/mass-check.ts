@@ -1,56 +1,55 @@
 /**
- * mass-check — сколько обязательств извлекается из каждого SKILL.md профиля.
+ * mass-check — сколько обязательств извлекается из каждого SKILL.md каталога скиллов.
  * Гейт читает файл так же, как read skill://, поэтому прямой прогон
- * извлекателя по каталогу скиллов даёт ту же картину без запуска omp.
+ * извлекателя по каталогу даёт ту же картину без запуска omp.
+ *
+ *   bun probes/mass-check.ts <каталог-скиллов> [путь-к-расширению]
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
-const EXT = "C:/Users/Kerry/.omp/profiles/aggg5/agent/extensions/skill-gate.ts";
-const mod: any = await import("file:///" + EXT.replace(/\\/g, "/"));
+const dirArg = process.argv[2];
+if (!dirArg) {
+  console.error("использование: bun probes/mass-check.ts <каталог-скиллов> [путь-к-расширению]");
+  process.exit(1);
+}
+const EXT = process.argv[3] ?? join(import.meta.dir, "../src/skill-gate.ts");
+type Pi = { on: (ev: string, fn: (e: unknown, c: unknown) => unknown) => void; registerCommand: () => void };
+type Handler = (e: unknown, c: unknown) => unknown;
+const mod = (await import(pathToFileURL(EXT).href)) as { default: (pi: Pi) => void };
+const handlers: Record<string, Handler> = {};
+mod.default({ on: (ev, fn) => { handlers[ev] = fn; }, registerCommand: () => {} });
+const ctx: unknown = { agent: { kind: "main" }, ui: { notify: () => {} } };
+await handlers["input"]({}, ctx);
 
-// extractObligations не экспортирована: вытаскиваем через контекст tool_result
-const handlers: Record<string, any> = {};
-const pi: any = {
-  on: (n: string, fn: any) => { handlers[n] = fn; },
-  registerCommand: () => {},
-};
-mod.default(pi);
-const ctx = { agent: { kind: "main" }, ui: { notify: () => {} } };
-
-async function obligationsOf(path: string): Promise<number> {
+async function obligationsOf(name: string, path: string): Promise<number> {
   await handlers["input"]({}, ctx);
   const body = readFileSync(path, "utf-8");
-  const res: any = await handlers["tool_result"](
+  const res = (await handlers["tool_result"](
     {
       toolName: "read",
       isError: false,
-      input: { path: `skill://body-check` },
+      input: { path: `skill://${name}` },
       content: [{ type: "text", text: `[Skill file: ${path}]\n${body}` }],
     },
     ctx,
-  );
-  const n = /\((\d+)\)/.exec(res?.additionalContext ?? "")?.[1];
-  return n ? Number(n) : 0;
+  )) as { additionalContext?: string } | undefined;
+  const m = /\((\d+)\)/.exec(res?.additionalContext ?? "");
+  return m ? Number(m[1]) : 0;
 }
 
-const profiles = process.argv.slice(2);
-for (const p of profiles) {
-  const dir = `C:/Users/Kerry/.omp/profiles/${p}/agent/skills`;
-  let zero = 0, nonzero = 0;
-  const empty: string[] = [];
-  // Deno нет под рукой: перечисляем через readFileSync
-  const { readdirSync } = await import("node:fs");
-  for (const name of readdirSync(dir)) {
-    const file = join(dir, name, "SKILL.md");
-    try {
-      const n = await obligationsOf(file);
-      if (n > 0) nonzero++;
-      else { zero++; empty.push(name); }
-    } catch {
-      zero++; empty.push(name + " (упало)");
-    }
+let zero = 0, nonzero = 0;
+const empty: string[] = [];
+for (const name of readdirSync(dirArg)) {
+  const file = join(dirArg, name, "SKILL.md");
+  try {
+    const n = await obligationsOf(name, file);
+    if (n > 0) { nonzero++; console.log(`${String(n).padStart(2)}  ${name}`); }
+    else { zero++; empty.push(name); }
+  } catch {
+    // нет SKILL.md — не скилл, не считаем
   }
-  console.log(`\n=== ${p}: скиллов ${zero + nonzero}, с обязательствами ${nonzero}, без них ${zero}`);
-  console.log("   без обязательств: " + empty.slice(0, 12).join(", ") + (empty.length > 12 ? " …" : ""));
 }
+console.log(`\nпокрытие: ${nonzero}/${zero + nonzero} скиллов несут обязательства`);
+if (empty.length) console.log(`без обязательств: ${empty.slice(0, 12).join(", ")}${empty.length > 12 ? " …" : ""}`);
