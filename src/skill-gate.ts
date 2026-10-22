@@ -259,14 +259,15 @@ function classifyEvidence(
       return "external";
     }
   }
-  // Цитата без метки: фрагмент в кавычках, который реально был в выводе инструментов или в ответе.
-  // Выдуманная фраза там не встретится, поэтому проверка не слабеет.
+  // Цитата без метки: фрагмент в кавычках, который реально был в выводе инструментов.
+  // Текст ответа агента здесь НЕ источник: иначе агент подтверждает сам себя,
+  // процитировав собственную фразу выше по ходу (R5, дыра закрыта v5.3.1).
   const chunks: string[] = [];
   for (const m of evidence.matchAll(/`([^`]{8,})`/g)) chunks.push(m[1]);
   for (const m of evidence.matchAll(/[«"]([^«»"]{8,})[»"]/g)) chunks.push(m[1]);
   for (const raw of chunks) {
     const text = raw.trim().toLowerCase();
-    if (text.length >= 8 && haystack.includes(text)) return "quote";
+    if (text.length >= 8 && toolOutputs.toLowerCase().includes(text)) return "quote";
   }
   return "none";
 }
