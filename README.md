@@ -121,6 +121,14 @@ bun probes/mass-check.ts ~/.omp/profiles/<ваш-профиль>/agent/skills
 - Дорогие задачи (лендинг с генерацией картинок, итеративный UI) дороги сами по себе,
   не из-за гейта: им нужен отдельный потолок итераций.
 
+## О сверке контрольных сумм
+
+Рабочая копия расширения на машине автора: md5 `0885e3e589aa90d3e47435fbeb30593c`
+(v5.2, 27 466 байт). Git на Windows при checkout может конвертировать переводы строк
+(CRLF), тогда md5 файла в клоне будет другим: `2470b4370cdaa01502fb42c4dc008900`.
+Содержимое идентично; для побайтной сверки используйте
+`git show HEAD:src/skill-gate.ts | md5sum`.
+
 ## Лицензия
 
-MIT (см. `LICENSE` в [ai4bordon/omp-skill-gate](https://github.com/ai4bordon/omp-skill-gate)).
+MIT (см. `LICENSE`; первоисточник [ai4bordon/omp-skill-gate](https://github.com/ai4bordon/omp-skill-gate)).
