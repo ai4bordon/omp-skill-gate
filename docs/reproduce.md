@@ -21,14 +21,17 @@ cp src/skill-gate.ts ~/.omp/profiles/<ваш-профиль>/agent/extensions/
 
 ```bash
 cd probes
-bun obligations-test.ts   # 13/13
+bun obligations-test.ts   # 13/13 (на машине без каталога ~/.agents/skills: 11/11, кейсы 10-11 пропущены)
 bun quote-test.ts         # 2/2
 bun rx-fix-test.ts        # 9/9
-bun ref-check.ts          # 2/2
+bun ref-check.ts          # синтетика 2/2 + реальные скиллы, если установлены
 ```
 
-Все четыре пробы прогоняют расширение через фейковый `pi`: события input, tool_call,
+Все пробы гоняют расширение через фейковый `pi`: события input, tool_call,
 tool_result, message_update, session_stop. Никакой сети, никакой модели.
+Кейсы с локальными скиллами (obligations 10-11, ref-check «pohuy/spec-driven»)
+проверяются только если скиллы установлены в `~/.agents/skills`, иначе печатается
+«пропущено» и счётчик их не включает.
 
 ## Шаг 2: покрытие вашего каталога скиллов
 
