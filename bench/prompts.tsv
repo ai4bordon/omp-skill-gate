@@ -1,0 +1,21 @@
+id	expect	prompt
+01-code-tdd	tdd-workflow|test-driven-development	Добавь в calc.js функцию mul и покрой её тестом по TDD: сначала тест, потом код. Файл calc.js уже есть.
+02-code-review	code-review	Проверь файл handler.js ревью: найди проблемы и дай вердикт.
+03-spec	spec-driven-development|spec-mode	Сделай спеку новой фичи «экспорт заметок в markdown» в .kiro/specs/export-md/: требования, дизайн, задачи.
+04-design-landing	frontend-design|design-taste-frontend	Сверстай index.html: лендинг для сервиса доставки кофе, чтобы не выглядел как шаблон.
+05-design-doc	design-documentation	Напиши design.md для сервиса закладок: обзор, компоненты, обработка ошибок.
+06-research	camoufox-research-deep-research|searchmcp-research	Найди в интернете 3 источника про то, как Bun отличается от Node по холодному старту, и сделай выжимку с ссылками.
+07-text	doc-coauthoring|documentation-authoring	Напиши README для библиотеки строковых утилит: назначение, установка, три примера.
+08-telegram	telegram-mini-app	Сделай скелет Telegram Mini App: index.html с telegram-ui и одна кнопка, которая шлёт данные в бота.
+09-powershell	powershell-master|powershell-windows	Напиши PowerShell-скрипт deploy.ps1: копирует папку dist в C:\temp\deploy и пишет лог.
+10-bats	bats-testing-patterns	Напиши bats-тест для скрипта backup.sh: проверяет, что архив создаётся.
+11-mcp	mcp-builder	Сделай MCP-сервер с одним инструментом echo на TypeScript, со схемой аргументов.
+12-memory	memory	Сохрани в память заметку: наш проект использует Bun вместо Node, причина — скорость старта.
+13-wiki	wiki	Добавь в вики заметку про наш выбор Bun вместо Node.
+14-debug	debugging-and-error-recovery	Разберись, почему скрипт fail.js падает с TypeError: undefined is not a function, и почини.
+15-refactor	slicing-god-files	Файл big.js на 400 строк. Разбей его на модули, не меняя поведения.
+16-security	code-hardcode-audit	Проверь файл config.js на захардкоженные секреты и ключи.
+17-control-chat	-	Объясни в двух абзацах, чем отличается HTTP/2 от HTTP/3.
+18-control-trivial	-	Переименуй переменную x в total в файле tiny.js.
+19-git	git-workflow	Сделай коммит для текущих изменений в этом каталоге: посмотри diff и напиши сообщение.
+20-presentation	html-presentation-to-pdf	Сделай HTML-презентацию 16:9 из трёх слайдов про итоги квартала.
