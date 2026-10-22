@@ -24,10 +24,14 @@ const BLOCK_REASON =
   "Сейчас и то, и другое отсутствует - действие заблокировано.";
 
 // Слой 2: статусы обязательств. Форма строки фиксирована, чтобы её можно было разобрать.
-const STATUS_LINE = /(^|\n)[ \t]*(сделано|неприменимо|не сделано)\s*:\s*(o\d+)\b([^\n]*)/gi;
+// Маркер списка («- », «* ») слева допускается: агент пишет статусы обычным списком.
+// Необязательное имя скилла перед id нужно, когда открыто два скилла и их o1..o6 сталкиваются.
+const STATUS_LINE =
+  /(^|\n)[ \t]*(?:[-*+][ \t]+)?(сделано|неприменимо|не сделано)\s*:\s*(?:([a-z0-9._-]+)[ \t]*\[[ \t]*(o\d+)\b[ \t]*\]|(o\d+)\b)([^\n]*)/gi;
 const EVIDENCE_MARK = /(?:доказательство|evidence|подтверждено)\s*:\s*(.+)$/i;
 const STOP_BLOCK_LIMIT = 3;
-const OBLIGATION_CAP = 6;
+const OBLIGATION_CAP = 6; // пунктов с одного скилла
+const TOTAL_OBLIGATION_CAP = 10; // пунктов со всех открытых скиллов: иначе пять скиллов дают тридцать строк
 
 // Заголовки секций, где лежат именно обязательства, а не объяснения
 const STEP_SECTION = /(process|процесс|workflow|воркфлоу|steps|шаги|порядок|checklist|чек-лист|алгоритм|процедура|how to|как делать)/i;
@@ -160,8 +164,11 @@ function obligationsNotice(skill: string, items: Obligation[]): string {
   return (
     `skill-gate: скилл ${skill} несёт обязательства (${items.length}): ${list}. ` +
     `Перед завершением по каждому пункту нужна строка одного из трёх видов: ` +
-    `«сделано: <id> — доказательство: <путь, команда или цитата из ответа>», ` +
+    `«сделано: ${skill} [${items[0]?.id ?? "o1"}] — доказательство: <путь, команда или цитата из вывода>», ` +
     `«неприменимо: <id> — причина» или «не сделано: <id> — причина». ` +
+    `Цитатой считается фрагмент в кавычках, который реально был в выводе инструмента или в ответе. ` +
+    `Форма без имени скилла («сделано: ${items[0]?.id ?? "o1"} — …») тоже годится. ` +
+    `Маркер списка «- » в начале строки не мешает. ` +
     `Доказательство проверяется по журналу хода: выдуманное не примут.`
   );
 }
@@ -172,14 +179,18 @@ function parseStatuses(text: string): Map<string, Status> {
   STATUS_LINE.lastIndex = 0;
   for (let m = STATUS_LINE.exec(text); m; m = STATUS_LINE.exec(text)) {
     const kind = m[2].toLowerCase() === "сделано" ? "done" : m[2].toLowerCase() === "неприменимо" ? "na" : "gap";
-    const id = m[3].toLowerCase();
-    const tail = m[4] ?? "";
+    const skill = (m[3] ?? "").toLowerCase();
+    const id = (m[4] ?? m[5] ?? "").toLowerCase();
+    if (!id) continue;
+    // Ключ: «скилл:oN» для адресной строки, просто «oN» для общей
+    const key = skill ? `${skill}:${id}` : id;
+    const tail = m[6] ?? "";
     const ev = EVIDENCE_MARK.exec(tail);
     if (kind === "done") {
-      out.set(id, { kind, evidence: ev ? ev[1].trim() : "" });
+      out.set(key, { kind, evidence: ev ? ev[1].trim() : "" });
     } else {
-      const reason = tail.replace(/^[\s—–:-]+/, "").trim();
-      out.set(id, { kind, reason: reason.slice(0, 120) });
+      const reason = tail.replace(/^[\s—–:,.-]+/, "").trim();
+      out.set(key, { kind, reason: reason.slice(0, 120) });
     }
   }
   return out;
@@ -205,14 +216,18 @@ function classifyEvidence(
   existedBefore: Set<string>,
   writtenPaths: Set<string>,
   answerText: string,
+  toolOutputs: string,
 ): "external" | "self" | "quote" | "none" {
   const clean = evidence.replace(/[`"'«»]/g, "").trim();
   if (clean.length < 3) return "none";
+  // Строки статусов из ответа вычитаем: иначе агент подтверждает сам себя собственной формулировкой.
+  const answerSansStatus = answerText.replace(STATUS_LINE, "\n");
+  const haystack = (toolOutputs + "\n" + answerSansStatus).toLowerCase();
   const quote = /^(?:цитата|quote)\s*:\s*(.+)$/i.exec(clean);
   if (quote) {
     const text = quote[1].replace(/[`"'«»]/g, "").trim();
     if (text.length < 12) return "none"; // короткая фраза ничего не доказывает
-    return answerText.toLowerCase().includes(text.toLowerCase()) ? "quote" : "none";
+    return haystack.includes(text.toLowerCase()) ? "quote" : "none";
   }
   const probe = normPath(clean.slice(0, 80));
   for (const f of facts) {
@@ -224,6 +239,15 @@ function classifyEvidence(
       if (writtenPaths.has(v) && !existedBefore.has(v)) return "self";
       return "external";
     }
+  }
+  // Цитата без метки: фрагмент в кавычках, который реально был в выводе инструментов или в ответе.
+  // Выдуманная фраза там не встретится, поэтому проверка не слабеет.
+  const chunks: string[] = [];
+  for (const m of evidence.matchAll(/`([^`]{8,})`/g)) chunks.push(m[1]);
+  for (const m of evidence.matchAll(/[«"]([^«»"]{8,})[»"]/g)) chunks.push(m[1]);
+  for (const raw of chunks) {
+    const text = raw.trim().toLowerCase();
+    if (text.length >= 8 && haystack.includes(text)) return "quote";
   }
   return "none";
 }
@@ -242,6 +266,8 @@ export default function skillGate(pi: ExtensionAPI): void {
   let writtenPaths = new Set<string>(); // файлы, созданные или перезаписанные в этом ходе
   let actionCalls = 0; // вызовы сверх чтения скиллов: отличает работу от справки
   let answerText = ""; // накопленный текст ответа за ход
+  let toolOutputs = ""; // накопленный вывод инструментов: источник цитат для доказательств
+  const TOOL_OUTPUT_CAP = 400_000; // символов; дальше не растём
   let statuses = new Map<string, Status>();
   let stopBlocks = 0; // отказов завершения в этом ходе (предохранитель)
   let stopGaveUp = false; // предохранитель сработал
@@ -258,13 +284,20 @@ export default function skillGate(pi: ExtensionAPI): void {
     if (actionCalls === 0) return { missing, unproven, selfEv, extEv }; // ход-справка: только чтение скилла
     for (const group of obligationsBySkill) {
       for (const item of group.items) {
-        const st = statuses.get(item.id);
+        const st = statuses.get(`${group.skill}:${item.id}`) ?? statuses.get(item.id);
         if (!st) {
           missing.push(`${group.skill} [${item.id}] ${item.text}`);
           continue;
         }
         if (st.kind !== "done") continue;
-        const kind = classifyEvidence(st.evidence ?? "", facts, existedBefore, writtenPaths, answerText);
+        const kind = classifyEvidence(
+          st.evidence ?? "",
+          facts,
+          existedBefore,
+          writtenPaths,
+          answerText,
+          toolOutputs,
+        );
         if (kind === "none") unproven.push(`${group.skill} [${item.id}] ${item.text}`);
         else if (kind === "self") selfEv += 1;
         else extEv += 1;
@@ -287,6 +320,7 @@ export default function skillGate(pi: ExtensionAPI): void {
     writtenPaths = new Set<string>();
     actionCalls = 0;
     answerText = "";
+    toolOutputs = "";
     statuses = new Map<string, Status>();
     stopBlocks = 0;
     stopGaveUp = false;
@@ -295,23 +329,39 @@ export default function skillGate(pi: ExtensionAPI): void {
   // FR-2: скилл открыт = read skill:// прошёл успешно; здесь же вытаскиваем его обязательства
   pi.on("tool_result", (event, ctx) => {
     if (!mainOnly(ctx)) return;
-    if (event.toolName !== "read" || event.isError) return;
-    const p = event.input?.path;
-    const text = event.content
+    const collected = event.content
       .filter((c): c is { type: "text"; text: string } => c.type === "text")
       .map((c) => c.text)
       .join("");
+    // Вывод инструментов нужен для проверки цитат: это единственный источник фактов,
+    // который агент не может выдумать. Копим по всем инструментам, а не только по read.
+    if (!event.isError && collected && toolOutputs.length < TOOL_OUTPUT_CAP) {
+      toolOutputs += "\n" + collected.slice(0, 8000);
+    }
+    if (event.toolName !== "read" || event.isError) return;
+    const p = event.input?.path;
+    const text = collected;
 
     if (typeof p === "string" && p.startsWith("skill://")) {
       const name = p.slice("skill://".length).split(/[/?#]/)[0];
       if (name && !openSkills.includes(name)) openSkills.push(name);
       dirty = false;
-      // обязательства берём из тела SKILL.md, а не из ручной таблицы
-      if (name && text.includes("[Skill file") && !obligationsBySkill.some((g) => g.skill === name)) {
+      // Обязательства берём только из тела самого скилла.
+      // Файл references/ это справка: его оглавление не работа, а описание.
+      const isSkillBody = /^skill:\/\/[^/?#]+(?:[/\\]SKILL\.md)?$/i.test(p);
+      if (
+        isSkillBody &&
+        name &&
+        text.includes("[Skill file") &&
+        !obligationsBySkill.some((g) => g.skill === name)
+      ) {
         const items = extractObligations(text);
-        if (items.length > 0) {
-          obligationsBySkill.push({ skill: name, items });
-          return { additionalContext: obligationsNotice(name, items) };
+        const already = obligationsBySkill.reduce((n, g) => n + g.items.length, 0);
+        const room = TOTAL_OBLIGATION_CAP - already;
+        const take = items.slice(0, Math.max(0, room));
+        if (take.length > 0) {
+          obligationsBySkill.push({ skill: name, items: take });
+          return { additionalContext: obligationsNotice(name, take) };
         }
       }
       return;
