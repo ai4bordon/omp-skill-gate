@@ -1,16 +1,26 @@
 """Разбирает потоки omp -p (results/<id>.json) и печатает сводку по стенду.
 
-    python parse.py            # текущий проход, results/
-    python parse.py pass1      # сохранённый проход
+    python parse.py                     # текущий проход, results/
+    python parse.py pass1               # сохранённый проход
+    python parse.py results --json out.json
 """
+import argparse
 import json
 import os
 import re
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-RESULTS = ROOT / (sys.argv[1] if len(sys.argv) > 1 else "results")
+
+def _args():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("dir", nargs="?", default="results", help="каталог прогонов (по умолчанию results)")
+    ap.add_argument("--json", dest="json_out", help="путь для JSON-сводки (иначе <dir>/summary.json)")
+    return ap.parse_args()
+
+
+ARGS = _args()
+RESULTS = ROOT / ARGS.dir
 SESSIONS = Path(os.environ.get("SG_SESSIONS", str(Path.home() / ".omp/profiles/aggg5/agent/sessions")))
 
 SKILL_RE = re.compile(r"skill://([A-Za-z0-9._-]+)")
@@ -151,7 +161,9 @@ def main() -> None:
             prompts.append((parts[0], parts[1]))
 
     out = [analyze(pid, exp) for pid, exp in prompts]
-    (RESULTS / "summary.json").write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_path = Path(ARGS.json_out) if ARGS.json_out else RESULTS / "summary.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print("| # | промпт | ожидался | взял | вердикт | ходов | блок | статусы | советник | цена |")
     print("|---|---|---|---|---|---|---|---|---|---|")

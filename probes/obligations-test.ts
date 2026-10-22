@@ -7,12 +7,12 @@
  *
  *   bun run obligations-test.ts
  */
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 
-const EXT = "C:/Users/Kerry/.omp/profiles/aggg5/agent/extensions/skill-gate.ts";
+const EXT = process.argv[2] ?? join(import.meta.dir, "../src/skill-gate.ts");
 
 type Handler = (event: unknown, ctx: unknown) => unknown;
 type Harness = {
@@ -227,32 +227,44 @@ function check(name: string, ok: boolean, detail: string) {
 }
 
 // --- 10. Реальный SKILL.md: code-review даёт обязательства из шагов процесса ---
+// кейс зависит от локального каталога скиллов; на чужой машине пропускается
 {
-  const h = await boot();
-  await h.run("input");
-  const body = readFileSync("C:/Users/Kerry/.agents/skills/code-review/SKILL.md", "utf8");
-  const res = (await h.run("tool_result", skillRead("code-review", body))) as
-    | { additionalContext?: string }
-    | undefined;
-  const count = (res?.additionalContext ?? "").match(/\[o\d\]/g)?.length ?? 0;
-  check("10. настоящий code-review даёт 5-6 обязательств", count >= 5, `пунктов=${count}`);
+  const file = join(homedir(), ".agents/skills/code-review/SKILL.md");
+  if (existsSync(file)) {
+    const h = await boot();
+    await h.run("input");
+    const body = readFileSync(file, "utf8");
+    const res = (await h.run("tool_result", skillRead("code-review", body))) as
+      | { additionalContext?: string }
+      | undefined;
+    const count = (res?.additionalContext ?? "").match(/\[o\d\]/g)?.length ?? 0;
+    check("10. настоящий code-review даёт 5-6 обязательств", count >= 5, `пунктов=${count}`);
+  } else {
+    console.log("пропущено: скилл code-review не установлен");
+  }
 }
 
 // --- 11. Скилл-справочник без процесса обязательств не даёт ---
+// кейс зависит от локального каталога скиллов; на чужой машине пропускается
 {
-  const h = await boot();
-  await h.run("input");
-  const body = readFileSync("C:/Users/Kerry/.agents/skills/bun-package-manager/SKILL.md", "utf8");
-  const res = (await h.run("tool_result", skillRead("bun-package-manager", body))) as
-    | { additionalContext?: string }
-    | undefined;
-  await h.run("tool_call", { toolName: "write", input: { path: "x.txt" } });
-  const stop = await h.run("session_stop", {});
-  check(
-    "11. скилл-справочник не порождает пустых требований",
-    res?.additionalContext === undefined && stop === undefined,
-    `подсказка=${res?.additionalContext ? "есть" : "нет"}, блок=${String(JSON.stringify(stop)).slice(0, 40)}`,
-  );
+  const file = join(homedir(), ".agents/skills/bun-package-manager/SKILL.md");
+  if (existsSync(file)) {
+    const h = await boot();
+    await h.run("input");
+    const body = readFileSync(file, "utf8");
+    const res = (await h.run("tool_result", skillRead("bun-package-manager", body))) as
+      | { additionalContext?: string }
+      | undefined;
+    await h.run("tool_call", { toolName: "write", input: { path: "x.txt" } });
+    const stop = await h.run("session_stop", {});
+    check(
+      "11. скилл-справочник не порождает пустых требований",
+      res?.additionalContext === undefined && stop === undefined,
+      `подсказка=${res?.additionalContext ? "есть" : "нет"}, блок=${String(JSON.stringify(stop)).slice(0, 40)}`,
+    );
+  } else {
+    console.log("пропущено: скилл bun-package-manager не установлен");
+  }
 }
 
 

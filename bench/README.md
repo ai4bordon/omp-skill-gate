@@ -3,10 +3,18 @@
 20 промптов: 18 доменов + 2 контрольных. Запуск живых прогонов omp с гейтом и Советником.
 
 ```
-python seed.py     # фикстуры в каталоги прогонов
-python run.py      # 20 прогонов omp -p --advisor --mode json, параллельно 5
-python parse.py results   # таблица + summary
+python seed.py                              # фикстуры в каталоги прогонов (01-* … 20-*)
+python run.py                               # 20 прогонов omp -p --advisor --mode json, параллельно 5
+python parse.py results                     # таблица в консоль + results/summary.json
+python parse.py results --json out.json     # то же, сводка в указанный файл
 ```
 
-Промпты и ожидаемые скиллы: `prompts.tsv`. Сводки трёх проходов с машины автора:
-`results/pass{1,2,3}-summary.json`. Детали методики и находок: `../docs/bench.md`.
+Промпты и ожидаемые скиллы: `prompts.tsv`. Живые прогоны пишутся в `results/<id>.json`
+(jsonl-выход omp, ~19 МБ на 20 прогонов); в репозиторий включены только сводные файлы
+`results/pass{1,2,3}-summary.json` с машины автора. Для пересборки сводки нужны
+сырые прогоны: прогоните стенд у себя или возьмите свои результаты.
+
+Переменные окружения: `SG_OMP` (бинарник omp, по умолчанию `omp`), `SG_SESSIONS`
+(каталог журналов сессий, по умолчанию `~/.omp/profiles/aggg5/agent/sessions`).
+
+Детали методики и находок: `../docs/bench.md`.
