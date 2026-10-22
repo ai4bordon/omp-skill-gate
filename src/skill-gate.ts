@@ -226,27 +226,25 @@ function normPath(p: string): string {
 }
 
 // Доказательство считается настоящим только по журналу хода.
-// Файл и команда ищутся среди фактических вызовов; цитата — в тексте ответа, но не в самой строке статуса.
+// Файл и команда ищутся среди фактических вызовов; цитата — в выводе инструментов.
 // Возвращает вид доказательства: внешнее (существовало до правки), своё (создано в этом же ходе),
-// цитата, либо none — доказательства нет.
+// цитата (была в выводе) либо none — доказательства нет. Собственный текст ответа
+// источником не является (R5): иначе агент подтверждает сам себя собственной фразой.
 function classifyEvidence(
   evidence: string,
   facts: Fact[],
   existedBefore: Set<string>,
   writtenPaths: Set<string>,
-  answerText: string,
   toolOutputs: string,
 ): "external" | "self" | "quote" | "none" {
   const clean = evidence.replace(/[`"'«»]/g, "").trim();
   if (clean.length < 3) return "none";
-  // Строки статусов из ответа вычитаем: иначе агент подтверждает сам себя собственной формулировкой.
-  const answerSansStatus = answerText.replace(STATUS_LINE, "\n");
-  const haystack = (toolOutputs + "\n" + answerSansStatus).toLowerCase();
+  const outputs = toolOutputs.toLowerCase();
   const quote = /^(?:цитата|quote)\s*:\s*(.+)$/i.exec(clean);
   if (quote) {
     const text = quote[1].replace(/[`"'«»]/g, "").trim();
     if (text.length < 12) return "none"; // короткая фраза ничего не доказывает
-    return haystack.includes(text.toLowerCase()) ? "quote" : "none";
+    return outputs.includes(text.toLowerCase()) ? "quote" : "none";
   }
   const probe = normPath(clean.slice(0, 80));
   for (const f of facts) {
@@ -285,7 +283,6 @@ export default function skillGate(pi: ExtensionAPI): void {
   let existedBefore = new Set<string>(); // файлы, прочитанные до записи (значит, существовали)
   let writtenPaths = new Set<string>(); // файлы, созданные или перезаписанные в этом ходе
   let actionCalls = 0; // вызовы сверх чтения скиллов: отличает работу от справки
-  let answerText = ""; // накопленный текст ответа за ход
   let toolOutputs = ""; // накопленный вывод инструментов: источник цитат для доказательств
   const TOOL_OUTPUT_CAP = 400_000; // символов; дальше не растём
   let statuses = new Map<string, Status>();
@@ -315,7 +312,6 @@ export default function skillGate(pi: ExtensionAPI): void {
           facts,
           existedBefore,
           writtenPaths,
-          answerText,
           toolOutputs,
         );
         if (kind === "none") unproven.push(`${group.skill} [${item.id}] ${item.text}`);
@@ -339,7 +335,6 @@ export default function skillGate(pi: ExtensionAPI): void {
     existedBefore = new Set<string>();
     writtenPaths = new Set<string>();
     actionCalls = 0;
-    answerText = "";
     toolOutputs = "";
     statuses = new Map<string, Status>();
     stopBlocks = 0;
@@ -391,12 +386,11 @@ export default function skillGate(pi: ExtensionAPI): void {
     if (text.includes("[Skill file")) dirty = false;
   });
 
-  // FR-3: декларация «скиллов нет»; слой 2: накопление ответа для проверки цитат
+  // FR-3: декларация «скиллов нет»; слой 2: статусы из текста ответа
   pi.on("message_update", (event, ctx) => {
     if (!mainOnly(ctx)) return;
     const text = assistantText(event.message);
     if (!text) return;
-    answerText = text;
     statuses = parseStatuses(text);
     if (!dirty) return;
     if (DECLARED_NO_SKILL.test(text)) {
