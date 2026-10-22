@@ -1,7 +1,9 @@
-// skill-gate: надсмотрщик скиллов для OMP. Жёсткий гейт: в ходе нельзя
-// выполнять ANY действие (чтение, поиск, правка, bash, MCP, web) до открытия
-// скилла (read skill://) или явной декларации «скиллов нет» в ответе.
-// Спека: .kiro/specs/skill-gate/. v2: шире, + чтение/разведка/MCP/bash.
+// skill-gate: надсмотрщик скиллов для OMP.
+// Слой 1 (v3.2): в ходе нельзя действовать, пока не открыт скилл или не объявлено «скиллов нет».
+// Слой 2 (v5): обязательства берутся из самого SKILL.md при его открытии — чек-листы и нумерованные
+// шаги. Каждый пункт обязан получить статус с доказательством, которое проверяется по журналу хода.
+// Домен не важен: код, дизайн, ресёрч, тексты — механизм один и тот же.
+// Спека: .kiro/specs/skill-gate-obligations/.
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 
 // ---- конфиг (NFR-2: одно место) ----
@@ -21,6 +23,20 @@ const BLOCK_REASON =
   "либо (2) явно написать в ответе строку «скиллов нет - причина». " +
   "Сейчас и то, и другое отсутствует - действие заблокировано.";
 
+// Слой 2: статусы обязательств. Форма строки фиксирована, чтобы её можно было разобрать.
+const STATUS_LINE = /(^|\n)[ \t]*(сделано|неприменимо|не сделано)\s*:\s*(o\d+)\b([^\n]*)/gi;
+const EVIDENCE_MARK = /(?:доказательство|evidence|подтверждено)\s*:\s*(.+)$/i;
+const STOP_BLOCK_LIMIT = 3;
+const OBLIGATION_CAP = 6;
+
+// Заголовки секций, где лежат именно обязательства, а не объяснения
+const STEP_SECTION = /(process|процесс|workflow|воркфлоу|steps|шаги|порядок|checklist|чек-лист|алгоритм|процедура|how to|как делать)/i;
+
+type Fact = { tool: string; path?: string; command?: string };
+type Obligation = { id: string; text: string; source: "checklist" | "steps" };
+type SkillObligations = { skill: string; items: Obligation[] };
+type Status = { kind: "done" | "na" | "gap"; evidence?: string; reason?: string };
+
 // Текст assistant-сообщения; content-части проверяются в рантайме
 function assistantText(msg: unknown): string {
   if (!msg || typeof msg !== "object") return "";
@@ -29,7 +45,7 @@ function assistantText(msg: unknown): string {
   let out = "";
   for (const part of m.content) {
     if (!part || typeof part !== "object") continue;
-    const p = part as { type?: unknown; text?: unknown }; // content-часть: text - рантайм-данные
+    const p = part as { type?: unknown; text?: unknown };
     if (p.type === "text" && typeof p.text === "string") out += p.text;
   }
   return out;
@@ -49,12 +65,10 @@ function extractDeclReason(text: string): string {
 function extractTarget(toolName: string, input: unknown): string | null | undefined {
   if (!input || typeof input !== "object") return undefined;
   const i = input as Record<string, unknown>;
-  // Файловые/поисковые: поле path
   if (toolName === "read" || toolName === "grep" || toolName === "glob" || toolName === "find") {
     const p = i.path;
     return typeof p === "string" ? p : undefined;
   }
-  // Запись: те же поля, что в v1
   if (toolName === "write") {
     const p = i.path;
     return typeof p === "string" ? p : undefined;
@@ -71,12 +85,147 @@ function extractTarget(toolName: string, input: unknown): string | null | undefi
     const m = body.match(/^\s*\[([^\]#\n]+)#?[\w]*\]?/m);
     return m ? m[1].trim() : undefined;
   }
-  // Внешние действия без файловой цели: bash, eval, web_search, task, MCP
   if (toolName === "bash" || toolName === "eval" || toolName === "web_search" || toolName === "task") {
     return null;
   }
   if (toolName.startsWith(MCP_PREFIX)) return null;
   return undefined;
+}
+
+// Снимает markdown-разметку и обрезает пункт до читаемой длины
+function cleanItem(s: string): string {
+  return s
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // ссылки → текст
+    .replace(/[*_`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.;:]$/, "")
+    .slice(0, 110);
+}
+
+// Вытаскивает обязательства из текста SKILL.md: сначала чек-листы, затем нумерованные шаги.
+// Код-блоки пропускаются: там примеры и шаблоны, а не требования к работе.
+function extractObligations(skillText: string): Obligation[] {
+  const lines = skillText.split(/\r?\n/);
+  const checklist: string[] = [];
+  const scopedSteps: string[] = [];
+  const looseSteps: string[] = [];
+  let inStepSection = false;
+  let inFence = false;
+
+  for (const line of lines) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+
+    const heading = /^\s{0,3}(#{2,4})\s+(.+)$/.exec(line);
+    if (heading) {
+      inStepSection = STEP_SECTION.test(heading[2]);
+      const numbered = /^\s{0,3}#{2,4}\s+\d+[.)]\s+(.+)$/.exec(line);
+      if (numbered) scopedSteps.push(cleanItem(numbered[1]));
+      continue;
+    }
+    // чек-лист: пункт считается обязательством в любом месте файла
+    const check = /^\s*[-*]\s*\[[ x]\]\s+(.+)$/.exec(line);
+    if (check) {
+      checklist.push(cleanItem(check[1]));
+      continue;
+    }
+    const num = /^\s*(\d+)[.)]\s+(.+)$/.exec(line);
+    if (!num) continue;
+    // шаг из «процессной» секции весомее случайного списка в объяснении
+    if (inStepSection) scopedSteps.push(cleanItem(num[2]));
+    else looseSteps.push(cleanItem(num[2]));
+  }
+
+  const source: "checklist" | "steps" = checklist.length >= 2 ? "checklist" : "steps";
+  const raw = source === "checklist" ? checklist : scopedSteps.length >= 2 ? scopedSteps : [...scopedSteps, ...looseSteps];
+  const seen = new Set<string>();
+  const items: Obligation[] = [];
+  for (const text of raw) {
+    const key = text.toLowerCase();
+    if (!text || seen.has(key)) continue;
+    seen.add(key);
+    items.push({ id: `o${items.length + 1}`, text, source });
+    if (items.length >= OBLIGATION_CAP) break;
+  }
+  return items;
+}
+
+// Строка для агента: что именно требуется закрыть по этому скиллу
+function obligationsNotice(skill: string, items: Obligation[]): string {
+  const list = items.map((o) => `[${o.id}] ${o.text}`).join(" · ");
+  return (
+    `skill-gate: скилл ${skill} несёт обязательства (${items.length}): ${list}. ` +
+    `Перед завершением по каждому пункту нужна строка одного из трёх видов: ` +
+    `«сделано: <id> — доказательство: <путь, команда или цитата из ответа>», ` +
+    `«неприменимо: <id> — причина» или «не сделано: <id> — причина». ` +
+    `Доказательство проверяется по журналу хода: выдуманное не примут.`
+  );
+}
+
+// Разбор строк статусов из текста ответа
+function parseStatuses(text: string): Map<string, Status> {
+  const out = new Map<string, Status>();
+  STATUS_LINE.lastIndex = 0;
+  for (let m = STATUS_LINE.exec(text); m; m = STATUS_LINE.exec(text)) {
+    const kind = m[2].toLowerCase() === "сделано" ? "done" : m[2].toLowerCase() === "неприменимо" ? "na" : "gap";
+    const id = m[3].toLowerCase();
+    const tail = m[4] ?? "";
+    const ev = EVIDENCE_MARK.exec(tail);
+    if (kind === "done") {
+      out.set(id, { kind, evidence: ev ? ev[1].trim() : "" });
+    } else {
+      const reason = tail.replace(/^[\s—–:-]+/, "").trim();
+      out.set(id, { kind, reason: reason.slice(0, 120) });
+    }
+  }
+  return out;
+}
+
+// Путь без селектора строк: `design.md:1-40,79-140` и `design.md` это один файл.
+// Буква диска (`C:/…`) селектором не считается: после двоеточия там слэш, а не цифра.
+function normPath(p: string): string {
+  return p
+    .toLowerCase()
+    .replace(/\\/g, "/")
+    .replace(/:(?=\d|raw\b|conflicts\b|img\b)/, "")
+    .replace(/:\d[\d,\-]*$/, "");
+}
+
+// Доказательство считается настоящим только по журналу хода.
+// Файл и команда ищутся среди фактических вызовов; цитата — в тексте ответа, но не в самой строке статуса.
+// Возвращает вид доказательства: внешнее (существовало до правки), своё (создано в этом же ходе),
+// цитата, либо none — доказательства нет.
+function classifyEvidence(
+  evidence: string,
+  facts: Fact[],
+  existedBefore: Set<string>,
+  writtenPaths: Set<string>,
+  answerText: string,
+): "external" | "self" | "quote" | "none" {
+  const clean = evidence.replace(/[`"'«»]/g, "").trim();
+  if (clean.length < 3) return "none";
+  const quote = /^(?:цитата|quote)\s*:\s*(.+)$/i.exec(clean);
+  if (quote) {
+    const text = quote[1].replace(/[`"'«»]/g, "").trim();
+    if (text.length < 12) return "none"; // короткая фраза ничего не доказывает
+    return answerText.toLowerCase().includes(text.toLowerCase()) ? "quote" : "none";
+  }
+  const probe = normPath(clean.slice(0, 80));
+  for (const f of facts) {
+    for (const value of [f.path, f.command]) {
+      if (!value) continue;
+      const v = normPath(value);
+      if (!(v.includes(probe) || probe.includes(v))) continue;
+      // файл, который агент создал в этом ходе и до этого не читал, — своё доказательство
+      if (writtenPaths.has(v) && !existedBefore.has(v)) return "self";
+      return "external";
+    }
+  }
+  return "none";
 }
 
 export default function skillGate(pi: ExtensionAPI): void {
@@ -85,11 +234,44 @@ export default function skillGate(pi: ExtensionAPI): void {
   let blocksThisTurn = 0;
   let blocksTotal = 0;
   let openSkills: string[] = []; // имена skill:// прочитанных в этом ходе
+  let obligationsBySkill: SkillObligations[] = []; // обязательства открытых скиллов
   let declNoSkill = false; // ход закрыт декларацией «скиллов нет»
   let declReason = ""; // текст причины после «скиллов нет -»
+  let facts: Fact[] = []; // факты хода для проверки доказательств
+  let existedBefore = new Set<string>(); // файлы, прочитанные до записи (значит, существовали)
+  let writtenPaths = new Set<string>(); // файлы, созданные или перезаписанные в этом ходе
+  let actionCalls = 0; // вызовы сверх чтения скиллов: отличает работу от справки
+  let answerText = ""; // накопленный текст ответа за ход
+  let statuses = new Map<string, Status>();
+  let stopBlocks = 0; // отказов завершения в этом ходе (предохранитель)
+  let stopGaveUp = false; // предохранитель сработал
 
   // FR-5: гейт только для главной сессии (ctx.agent.kind: "main" | "sub")
   const mainOnly = (ctx: ExtensionContext) => ctx.agent?.kind !== "sub";
+
+  // Незакрытые и недоказанные пункты всех открытых скиллов + счётчик видов доказательств
+  const unresolved = (): { missing: string[]; unproven: string[]; selfEv: number; extEv: number } => {
+    const missing: string[] = [];
+    const unproven: string[] = [];
+    let selfEv = 0;
+    let extEv = 0;
+    if (actionCalls === 0) return { missing, unproven, selfEv, extEv }; // ход-справка: только чтение скилла
+    for (const group of obligationsBySkill) {
+      for (const item of group.items) {
+        const st = statuses.get(item.id);
+        if (!st) {
+          missing.push(`${group.skill} [${item.id}] ${item.text}`);
+          continue;
+        }
+        if (st.kind !== "done") continue;
+        const kind = classifyEvidence(st.evidence ?? "", facts, existedBefore, writtenPaths, answerText);
+        if (kind === "none") unproven.push(`${group.skill} [${item.id}] ${item.text}`);
+        else if (kind === "self") selfEv += 1;
+        else extEv += 1;
+      }
+    }
+    return { missing, unproven, selfEv, extEv };
+  };
 
   // FR-4: новый ход = заново оценка
   pi.on("input", (_event, ctx) => {
@@ -97,46 +279,89 @@ export default function skillGate(pi: ExtensionAPI): void {
     dirty = true;
     blocksThisTurn = 0;
     openSkills = [];
+    obligationsBySkill = [];
     declNoSkill = false;
     declReason = "";
+    facts = [];
+    existedBefore = new Set<string>();
+    writtenPaths = new Set<string>();
+    actionCalls = 0;
+    answerText = "";
+    statuses = new Map<string, Status>();
+    stopBlocks = 0;
+    stopGaveUp = false;
   });
 
-  // FR-2: скилл открыт = read skill:// прошёл успешно
+  // FR-2: скилл открыт = read skill:// прошёл успешно; здесь же вытаскиваем его обязательства
   pi.on("tool_result", (event, ctx) => {
     if (!mainOnly(ctx)) return;
     if (event.toolName !== "read" || event.isError) return;
     const p = event.input?.path;
-    if (typeof p === "string" && p.startsWith("skill://")) {
-      const name = p.slice("skill://".length).split(/[/?#]/)[0];
-      if (name && !openSkills.includes(name)) openSkills.push(name);
-      dirty = false;
-      return;
-    }
     const text = event.content
       .filter((c): c is { type: "text"; text: string } => c.type === "text")
       .map((c) => c.text)
       .join("");
+
+    if (typeof p === "string" && p.startsWith("skill://")) {
+      const name = p.slice("skill://".length).split(/[/?#]/)[0];
+      if (name && !openSkills.includes(name)) openSkills.push(name);
+      dirty = false;
+      // обязательства берём из тела SKILL.md, а не из ручной таблицы
+      if (name && text.includes("[Skill file") && !obligationsBySkill.some((g) => g.skill === name)) {
+        const items = extractObligations(text);
+        if (items.length > 0) {
+          obligationsBySkill.push({ skill: name, items });
+          return { additionalContext: obligationsNotice(name, items) };
+        }
+      }
+      return;
+    }
     if (text.includes("[Skill file")) dirty = false;
   });
 
-  // FR-3: декларация «скиллов нет» в стриме ответа
+  // FR-3: декларация «скиллов нет»; слой 2: накопление ответа для проверки цитат
   pi.on("message_update", (event, ctx) => {
-    if (!mainOnly(ctx) || !dirty) return;
-    const m = DECLARED_NO_SKILL.exec(assistantText(event.message));
-    if (m) {
+    if (!mainOnly(ctx)) return;
+    const text = assistantText(event.message);
+    if (!text) return;
+    answerText = text;
+    statuses = parseStatuses(text);
+    if (!dirty) return;
+    if (DECLARED_NO_SKILL.test(text)) {
       dirty = false;
       declNoSkill = true;
-      declReason = extractDeclReason(assistantText(event.message));
+      declReason = extractDeclReason(text);
     }
   });
 
-  // FR-1: блок действий, пока ход грязный
+  // FR-1: блок действий, пока ход грязный; R2.1: сбор фактов для проверки доказательств
   pi.on("tool_call", (event, ctx) => {
     if (!mainOnly(ctx)) return;
     const tn = event.toolName;
+    const target = extractTarget(tn, event.input);
+    const command = tn === "bash" ? (event.input as { command?: unknown } | undefined)?.command : undefined;
+    facts.push({
+      tool: tn,
+      path: typeof target === "string" ? target : undefined,
+      command: typeof command === "string" ? command : undefined,
+    });
+    // чтение скиллов и внутренних адресов — не работа, а справка
+    const isReference =
+      (tn === "read" && typeof target === "string" && (target.startsWith("skill://") || INTERNAL_SCHEME.test(target)));
+    if (!isReference) actionCalls += 1;
+
+    // классификация доказательств: что существовало до правки, а что создано в этом ходе
+    if (typeof target === "string" && !INTERNAL_SCHEME.test(target)) {
+      const norm = normPath(target);
+      if (tn === "read" || tn === "grep" || tn === "glob" || tn === "find") {
+        if (!writtenPaths.has(norm)) existedBefore.add(norm);
+      } else if (tn === "write" || tn === "ast_edit") {
+        writtenPaths.add(norm);
+      }
+    }
+
     if (!(tn in GATED_TOOLS) && !tn.startsWith(MCP_PREFIX)) return;
     if (!dirty) return;
-    const target = extractTarget(tn, event.input);
     // Открытие скилла всегда пропускается (иначе петля)
     if (typeof target === "string" && target.startsWith("skill://")) return;
     // Внутренние URI omp не блокируются (FR-6)
@@ -153,8 +378,36 @@ export default function skillGate(pi: ExtensionAPI): void {
     return { block: true, reason: BLOCK_REASON };
   });
 
-  // FR-7: сводка по скиллам после ответа агента (agent_end = конец обработки запроса,
-  // один раз; turn_end эмитится на каждый модельный шаг - не подходит)
+  // R4: запрет завершения, пока обязательства не закрыты или не доказаны
+  pi.on("session_stop", (_event, ctx) => {
+    if (!mainOnly(ctx)) return;
+    const { missing, unproven } = unresolved();
+    if (missing.length === 0 && unproven.length === 0) return;
+    if (stopBlocks >= STOP_BLOCK_LIMIT) {
+      // R4.2: предохранитель, дальше не блокируем
+      stopGaveUp = true;
+      ctx.ui.notify?.(
+        `skill-gate: НЕ ПРИНЯТО · ${[...missing, ...unproven].join(" · ")} · гейт сдался после ${STOP_BLOCK_LIMIT} отказов`,
+        "warning",
+      );
+      return;
+    }
+    stopBlocks += 1;
+    const parts: string[] = [];
+    if (missing.length > 0) parts.push(`без статуса: ${missing.join("; ")}`);
+    if (unproven.length > 0) parts.push(`статус «сделано» без подтверждения в журнале: ${unproven.join("; ")}`);
+    return {
+      decision: "block",
+      reason:
+        `skill-gate: обязательства открытого скилла не закрыты. ${parts.join(". ")}. ` +
+        `Для каждого пункта нужна строка «сделано: <id> — доказательство: <артефакт>», ` +
+        `«неприменимо: <id> — причина» или «не сделано: <id> — причина». ` +
+        `Доказательство должно быть настоящим: путь, команда или цитата, реально бывшие в этом ходе. ` +
+        `После ${STOP_BLOCK_LIMIT} отказов гейт перестанет блокировать и покажет карточку «НЕ ПРИНЯТО».`,
+    };
+  });
+
+  // FR-7: сводка по скиллам и обязательствам после ответа агента
   pi.on("agent_end", (_event, ctx) => {
     if (!mainOnly(ctx)) return;
     const parts: string[] = [`блоков: ${blocksThisTurn}`];
@@ -164,15 +417,38 @@ export default function skillGate(pi: ExtensionAPI): void {
     if (blocksThisTurn > 0 && dirty) {
       parts.push(`ШТРАФ: ход не вымыт, блоков ${blocksThisTurn}`);
     }
+    const total = obligationsBySkill.reduce((n, g) => n + g.items.length, 0);
+    if (total > 0 && actionCalls > 0) {
+      const { missing, unproven, selfEv, extEv } = unresolved();
+      let gaps = 0;
+      for (const group of obligationsBySkill) {
+        for (const item of group.items) if (statuses.get(item.id)?.kind === "gap") gaps += 1;
+      }
+      parts.push(`обязательства: закрыто ${total - missing.length - unproven.length}/${total}`);
+      if (selfEv + extEv > 0) parts.push(`доказательства: внешних ${extEv}, своих ${selfEv}`);
+      if (gaps > 0) parts.push(`честных пробелов: ${gaps}`);
+      if (stopGaveUp) parts.push(`НЕ ПРИНЯТО: ${[...missing, ...unproven].join(" · ")}`);
+    } else if (total > 0) {
+      parts.push(`обязательства: ${total} (ход-справка, статусы не требуются)`);
+    }
     ctx.ui.notify?.(`skill-gate: ${parts.join(" · ")}`, "info");
   });
 
   // FR-8: статус
   pi.registerCommand("skill-gate", {
-    description: "skill-gate: состояние гейта, блоки за ход и всего",
+    description: "skill-gate: состояние гейта, блоки за ход и всего, незакрытые обязательства",
     handler: async (_args, ctx) => {
+      const { missing, unproven, selfEv, extEv } = unresolved();
+      const total = obligationsBySkill.reduce((n, g) => n + g.items.length, 0);
+      const tail =
+        total === 0
+          ? ""
+          : ` · обязательства ${total - missing.length - unproven.length}/${total}` +
+            (selfEv + extEv > 0 ? ` · доказательства: внешних ${extEv}, своих ${selfEv}` : "") +
+            (missing.length > 0 ? ` · без статуса: ${missing.join(" · ")}` : "") +
+            (unproven.length > 0 ? ` · без доказательства: ${unproven.join(" · ")}` : "");
       ctx.ui.notify(
-        `skill-gate: ход ${dirty ? "dirty (нужен скилл или «скиллов нет»)" : "clean"} · blocked this turn: ${blocksThisTurn} · total: ${blocksTotal}`,
+        `skill-gate: ход ${dirty ? "dirty (нужен скилл или «скиллов нет»)" : "clean"} · blocked this turn: ${blocksThisTurn} · total: ${blocksTotal} · отказов завершения: ${stopBlocks}/${STOP_BLOCK_LIMIT}${tail}`,
         "info",
       );
     },
