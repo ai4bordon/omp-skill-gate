@@ -73,4 +73,12 @@ async function scenario(name: string, evidence: string, expectBlock: boolean) {
 await scenario("цитата из вывода инструмента принята", "прогон до реализации → `0 pass` и `Export named 'mul' not found`", false);
 await scenario("выдуманная цитата отклонена", "прогон до реализации → `4 pass, 0 fail, всё зелёное`", true);
 
+// v5.3.1: фраза в кавычках, которой НЕ было в выводе инструментов, а была только
+// в этом же тексте ответа — самоподтверждение, отклоняется.
+await scenario(
+  "самоподтверждение своим текстом отклонено",
+  "прогон до реализации → «Export named 'mul' not found — вывод падения» (фраза моя, из ответа)",
+  true,
+);
+
 console.log(`\n${pass}/${total}`);
