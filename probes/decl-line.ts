@@ -1,7 +1,7 @@
 /**
  * decl-line — строка выбора скилла «скиллы: X — беру X» (R10, v5.3.2).
  *
- * Баг из чата aggg5 (28.10): модель объявила фоновый скилл строкой, гейт знал
+ * Баг из живого чата (28.10): модель объявила фоновый скилл строкой, гейт знал
  * только «скиллов нет» — три блокировки подряд. Теперь: все имена фоновые →
  * вымывает; есть профильное → заявка, ждём read; без декларации → блок.
  *
@@ -22,10 +22,10 @@ await handlers["input"]({}, ctx);
 
 const say = (text: string) => ({ message: { role: "assistant", content: [{ type: "text", text }] } });
 
-// 1. модель пишет строку выбора скилла, как в чате aggg5
-await handlers["message_update"](say("скиллы: pohuy — беру его, ultra-режим уже загружен в этой сессии."), ctx);
+// 1. модель пишет строку выбора скилла, как в живом чате
+await handlers["message_update"](say("скиллы: bg-style — беру его, ultra-режим уже загружен в этой сессии."), ctx);
 
-// 2. пробует bash — в чате aggg5 было три блокировки подряд
+// 2. пробует bash — в живом чате было три блокировки подряд
 const bash = (await handlers["tool_call"](
   { toolName: "bash", input: { command: "omp --version" } },
   ctx,
@@ -56,31 +56,31 @@ const passed = [ok1, ok2, ok3].filter(Boolean).length;
 console.log(`\n${passed}/3`);
 // v5.3.2 дополнение: строка с фоном + профильным НЕ вымывает (заявка, не исполнение)
 await handlers["input"]({}, ctx);
-await handlers["message_update"](say("скиллы: pohuy, tdd — беру tdd"), ctx);
+await handlers["message_update"](say("скиллы: bg-style, tdd — беру tdd"), ctx);
 const bash4 = (await handlers["tool_call"](
   { toolName: "bash", input: { command: "omp --version" } },
   ctx,
 )) as { block?: boolean } | undefined;
 const ok4 = bash4?.block === true;
-console.log(`${ok4 ? "ok  " : "FAIL"} bash после «скиллы: pohuy, tdd — беру tdd»: ${bash4?.block ? "ЗАБЛОКИРОВАН (заявка ≠ исполнение)" : "пропущен (дыра!)"}`);
+console.log(`${ok4 ? "ok  " : "FAIL"} bash после «скиллы: bg-style, tdd — беру tdd»: ${bash4?.block ? "ЗАБЛОКИРОВАН (заявка ≠ исполнение)" : "пропущен (дыра!)"}`);
 // v5.3.2: обычное тире вместо длинного
 await handlers["input"]({}, ctx);
-await handlers["message_update"](say("скиллы: pohuy - беру pohuy"), ctx);
+await handlers["message_update"](say("скиллы: bg-style - беру bg-style"), ctx);
 const bash5 = (await handlers["tool_call"](
   { toolName: "bash", input: { command: "omp --version" } },
   ctx,
 )) as { block?: boolean } | undefined;
 const ok5 = bash5?.block !== true;
-console.log(`${ok5 ? "ok  " : "FAIL"} bash после «скиллы: pohuy - беру pohuy» (обычное тире): ${bash5?.block ? "ЗАБЛОКИРОВАН" : "пропущен"}`);
+console.log(`${ok5 ? "ok  " : "FAIL"} bash после «скиллы: bg-style - беру bg-style» (обычное тире): ${bash5?.block ? "ЗАБЛОКИРОВАН" : "пропущен"}`);
 
-// v5.3.2 дополнение 2: имена в бэктиках/кавычках (живой прогон backender 28.10)
+// v5.3.2 дополнение 2: имена в бэктиках/кавычках (живой прогон 28.10)
 await handlers["input"]({}, ctx);
-await handlers["message_update"](say("скиллы: `pohuy` — беру `pohuy` (по прямой инструкции владельца)."), ctx);
+await handlers["message_update"](say("скиллы: `bg-style` — беру `bg-style` (по прямой инструкции владельца)."), ctx);
 const bash6 = (await handlers["tool_call"](
   { toolName: "bash", input: { command: "omp --version" } },
   ctx,
 )) as { block?: boolean } | undefined;
 const ok6 = bash6?.block !== true;
-console.log(`${ok6 ? "ok  " : "FAIL"} bash после «скиллы: \`pohuy\` — беру \`pohuy\`»: ${bash6?.block ? "ЗАБЛОКИРОВАН (бэктики ломают разбор)" : "пропущен"}`);
+console.log(`${ok6 ? "ok  " : "FAIL"} bash после «скиллы: \`bg-style\` — беру \`bg-style\`»: ${bash6?.block ? "ЗАБЛОКИРОВАН (бэктики ломают разбор)" : "пропущен"}`);
 const passed3 = [ok4, ok5, ok6].filter(Boolean).length;
 console.log(`доп. кейсы: ${passed3}/3`);

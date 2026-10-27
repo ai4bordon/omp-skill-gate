@@ -9,7 +9,7 @@ import re
 import sys
 from pathlib import Path
 
-SESSIONS = Path(os.environ.get("SG_SESSIONS", str(Path.home() / ".omp/profiles/aggg5/agent/sessions")))
+SESSIONS = Path(os.environ.get("SG_SESSIONS", str(Path.home() / ".omp/profiles/<профиль>/agent/sessions")))
 ROOT = Path(__file__).resolve().parent
 SKILL_RE = re.compile(r"skill://([A-Za-z0-9._-]+)")
 STATUS_RE = re.compile(
