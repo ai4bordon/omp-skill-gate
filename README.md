@@ -5,7 +5,7 @@
 **Детерминированный контроль применения скиллов для агентов OMP**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v5.3.1-green.svg)](src/skill-gate.ts)
+[![Version](https://img.shields.io/badge/version-v5.3.2-green.svg)](src/skill-gate.ts)
 [![Runtime](https://img.shields.io/badge/runtime-Bun%20%7C%20OMP%20extension-orange.svg)](https://github.com/can1357/oh-my-pi)
 
 [English version](README.en.md) · [Документация](docs/) · [Спека](specs/)
@@ -24,6 +24,7 @@
 ┌─ Слой 1 ───────────────────────────────────────────────┐
 │ агент: лезет в код, скилл не открыт                     │
 │ гейт:  ✋ BLOCKED — сначала read skill://<имя>           │
+│         или строка «скиллы: X — беру X»                 │
 │         или строка «скиллов нет - причина»              │
 ├─ Слой 2 ───────────────────────────────────────────────┤
 │ агент: скилл открыт, чек-лист извлечён (o1..o6)         │
@@ -82,7 +83,7 @@ bun probes/mass-check.ts ~/.omp/profiles/<ваш-профиль>/agent/skills
 ## Что внутри
 
 ```
-src/skill-gate.ts            расширение гейта (v5.3.1)
+src/skill-gate.ts            расширение гейта (v5.3.2)
 advisor/WATCHDOG.md          инструкция Советнику: роль, границы, лимит
 advisor/WATCHDOG.yml         подключение к OMP (--advisor)
 specs/                       requirements.md · design.md · tasks.md
@@ -102,6 +103,8 @@ history/README-v1.md         первая публичная версия (v1.0)
 | v5.0/v5.1 | слой 2: обязательства из SKILL.md, статусы, проверка доказательств |
 | v5.2 | правки по стенду: TOTAL_CAP=10, цитаты по выводу инструментов, запрет самоподтверждения |
 | v5.3 | фоновые скиллы не вымывают ход: список в `skill-gate.background.json` |
+| v5.3.1 | единый инвариант R5: обе формы цитат ищутся только в выводе инструментов |
+| v5.3.2 | строка выбора «скиллы: X — беру X» - легальная декларация: фон вымывает, заявка профильного ждёт read |
 | v5.3.1 | инвариант R5 един: обе формы цитат ищутся только в выводе инструментов |
 
 Точная история: `git log`. Спека с требованиями и гейтами: [`specs/`](specs/).

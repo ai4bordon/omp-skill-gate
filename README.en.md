@@ -5,7 +5,7 @@
 **Deterministic skill enforcement for OMP agents**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v5.3.1-green.svg)](src/skill-gate.ts)
+[![Version](https://img.shields.io/badge/version-v5.3.2-green.svg)](src/skill-gate.ts)
 [![Runtime](https://img.shields.io/badge/runtime-Bun%20%7C%20OMP%20extension-orange.svg)](https://github.com/can1357/oh-my-pi)
 
 [Русская версия](README.md) · [Docs](docs/) · [Spec](specs/)
@@ -24,7 +24,8 @@
 ┌─ Layer 1 ──────────────────────────────────────────────┐
 │ agent: touches code, no skill opened                    │
 │ gate:  ✋ BLOCKED — read skill://<name> first            │
-│         or declare "no applicable skills - reason"      │
+│         or a "skills: X — take X" declaration line      │
+│         or "no applicable skills - reason"              │
 ├─ Layer 2 ──────────────────────────────────────────────┤
 │ agent: skill opened, checklist extracted (o1..o6)       │
 │ gate:  before finishing — a status line for each item   │
@@ -80,7 +81,7 @@ New OMP sessions pick the extension up at start. Cases that need locally install
 ## Repository layout
 
 ```
-src/skill-gate.ts            the gate extension (v5.3.1)
+src/skill-gate.ts            the gate extension (v5.3.2)
 advisor/WATCHDOG.md          Advisor instructions: role, boundaries, limits
 advisor/WATCHDOG.yml         OMP wiring (--advisor)
 specs/                       requirements.md · design.md · tasks.md
@@ -100,6 +101,8 @@ history/README-v1.md         first public release (v1.0)
 | v5.0/v5.1 | layer 2: obligations from SKILL.md, statuses, evidence checks |
 | v5.2 | bench-driven fixes: TOTAL_CAP=10, quotes from tool outputs only, self-confirmation banned |
 | v5.3 | background skills no longer wash the turn: list in `skill-gate.background.json` |
+| v5.3.1 | single R5 invariant: both quote forms searched only in tool outputs |
+| v5.3.2 | skill-choice line "skills: X — take X" is a legal declaration: background-only washes, a profile claim awaits read |
 | v5.3.1 | single R5 invariant: both quote forms searched only in tool outputs |
 
 Full history: `git log`. Spec with requirements and gates: [`specs/`](specs/).
