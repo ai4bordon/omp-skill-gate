@@ -7,13 +7,23 @@
  *
  *   bun probes/decl-line.ts [путь-к-расширению]
  */
+import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
 const EXT = process.argv[2] ?? join(import.meta.dir, "../src/skill-gate.ts");
 type Pi = { on: (ev: string, fn: (e: unknown, c: unknown) => unknown) => void; registerCommand: () => void };
 type Handler = (e: unknown, c: unknown) => unknown;
-const mod = (await import(pathToFileURL(EXT).href)) as { default: (pi: Pi) => void };
+
+// Изолированное окружение: копия расширения + skill-gate.background.json
+// с фоновым bg-style рядом. Проба самодостаточна в чистом клоне.
+const work = mkdtempSync(join(tmpdir(), "decl-"));
+const modPath = join(work, "m.ts");
+writeFileSync(modPath, readFileSync(EXT, "utf8"));
+writeFileSync(join(work, "skill-gate.background.json"), '["bg-style"]');
+// dynamic import: путь копии создаётся в рантайме (mkdtemp) — plugin loading
+const mod = (await import(pathToFileURL(modPath).href)) as { default: (pi: Pi) => void };
 const handlers: Record<string, Handler> = {};
 mod.default({ on: (ev, fn) => { handlers[ev] = fn; }, registerCommand: () => {} });
 const ctx: unknown = { agent: { kind: "main" }, ui: { notify: () => {} } };

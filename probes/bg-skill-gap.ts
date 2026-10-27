@@ -3,18 +3,27 @@
  *
  * Воспроизводит замечание Советника: агент открыл только фоновый скилл
  * (загружаемый всегда по инструкции профиля) и работал без профильного.
- * Список фоновых скиллов берётся из skill-gate.background.json рядом
- * с расширением; проба запускается из каталога, где этот файл положен.
+ * Список фоновых скиллов: проба сама кладёт skill-gate.background.json
+ * рядом с копией расширения (mkdtemp), самодостаточна в чистом клоне.
  *
  *   bun probes/bg-skill-gap.ts [путь-к-расширению]
  */
+import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 
 const EXT = process.argv[2] ?? join(import.meta.dir, "../src/skill-gate.ts");
 type Pi = { on: (ev: string, fn: (e: unknown, c: unknown) => unknown) => void; registerCommand: () => void };
 type Handler = (e: unknown, c: unknown) => unknown;
-const mod = (await import(pathToFileURL(EXT).href)) as { default: (pi: Pi) => void };
+
+// Самодостаточное окружение: копия расширения + конфиг фоновых рядом (как у профиля)
+const work = mkdtempSync(join(tmpdir(), "bg-"));
+const modPath = join(work, "m.ts");
+writeFileSync(modPath, readFileSync(EXT, "utf8"));
+writeFileSync(join(work, "skill-gate.background.json"), '["bg-style"]');
+// dynamic import: путь копии создаётся в рантайме (mkdtemp) — plugin loading
+const mod = (await import(pathToFileURL(modPath).href)) as { default: (pi: Pi) => void };
 const handlers: Record<string, Handler> = {};
 mod.default({ on: (ev, fn) => { handlers[ev] = fn; }, registerCommand: () => {} });
 const ctx: unknown = { agent: { kind: "main" }, ui: { notify: () => {} } };
