@@ -1,7 +1,7 @@
 /**
  * decl-line — строка выбора скилла «скиллы: X — беру X» (R10, v5.3.2).
  *
- * Баг из чата profile-main (28.10): модель объявила фоновый скилл строкой, гейт знал
+ * Баг из живого чата (28.10): модель объявила фоновый скилл строкой, гейт знал
  * только «скиллов нет» — три блокировки подряд. Теперь: все имена фоновые →
  * вымывает; есть профильное → заявка, ждём read; без декларации → блок.
  *
@@ -22,10 +22,10 @@ await handlers["input"]({}, ctx);
 
 const say = (text: string) => ({ message: { role: "assistant", content: [{ type: "text", text }] } });
 
-// 1. модель пишет строку выбора скилла, как в чате profile-main
+// 1. модель пишет строку выбора скилла, как в живом чате
 await handlers["message_update"](say("скиллы: bg-style — беру его, ultra-режим уже загружен в этой сессии."), ctx);
 
-// 2. пробует bash — в чате profile-main было три блокировки подряд
+// 2. пробует bash — в живом чате было три блокировки подряд
 const bash = (await handlers["tool_call"](
   { toolName: "bash", input: { command: "omp --version" } },
   ctx,
@@ -73,7 +73,7 @@ const bash5 = (await handlers["tool_call"](
 const ok5 = bash5?.block !== true;
 console.log(`${ok5 ? "ok  " : "FAIL"} bash после «скиллы: bg-style - беру bg-style» (обычное тире): ${bash5?.block ? "ЗАБЛОКИРОВАН" : "пропущен"}`);
 
-// v5.3.2 дополнение 2: имена в бэктиках/кавычках (живой прогон profile-a 28.10)
+// v5.3.2 дополнение 2: имена в бэктиках/кавычках (живой прогон 28.10)
 await handlers["input"]({}, ctx);
 await handlers["message_update"](say("скиллы: `bg-style` — беру `bg-style` (по прямой инструкции владельца)."), ctx);
 const bash6 = (await handlers["tool_call"](

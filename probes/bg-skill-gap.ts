@@ -21,12 +21,12 @@ const ctx: unknown = { agent: { kind: "main" }, ui: { notify: () => {} } };
 await handlers["input"]({}, ctx);
 
 // bg-style: справочник стиля, обязательств не несёт (как в реальном каталоге)
-const POHUY = `# Стиль\n\n## Правила\n- Отвечай живым языком\n- Термины байт в байт\n`;
+const BG_STYLE = `# Стиль\n\n## Правила\n- Отвечай живым языком\n- Термины байт в байт\n`;
 
 // 1. агент открывает ТОЛЬКО фоновый скилл
 const open = await handlers["tool_result"](
   { toolName: "read", isError: false, input: { path: "skill://bg-style" },
-    content: [{ type: "text", text: `[Skill file: C:/skills/bg-style/SKILL.md]\n${POHUY}` }] },
+    content: [{ type: "text", text: `[Skill file: C:/skills/bg-style/SKILL.md]\n${BG_STYLE}` }] },
   ctx,
 );
 console.log("открыт только фоновый скилл, подсказка гейта:", open === undefined ? "нет обязательств" : "есть");
