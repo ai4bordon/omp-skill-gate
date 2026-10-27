@@ -410,7 +410,7 @@ export default function skillGate(pi: ExtensionAPI): void {
     const declared = DECLARED_SKILL_LINE.exec(text);
     if (declared) {
       // declared[1] — это (^|\n) из якоря, пустой на первой строке; имена в declared[2]
-      const names = declared[2].split(/[,;/]\s*/).map((s) => s.trim()).filter(Boolean);
+      const names = declared[2].split(/[,;/]\s*/).map((s) => s.replace(/[`*_'"]/g, "").trim()).filter(Boolean);
       if (names.length > 0 && names.every((n) => BACKGROUND_SKILLS[n])) {
         dirty = false;
         declNoSkill = true;

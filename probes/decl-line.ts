@@ -72,5 +72,15 @@ const bash5 = (await handlers["tool_call"](
 )) as { block?: boolean } | undefined;
 const ok5 = bash5?.block !== true;
 console.log(`${ok5 ? "ok  " : "FAIL"} bash после «скиллы: pohuy - беру pohuy» (обычное тире): ${bash5?.block ? "ЗАБЛОКИРОВАН" : "пропущен"}`);
-const passed2 = [ok4, ok5].filter(Boolean).length;
-console.log(`доп. кейсы: ${passed2}/2`);
+
+// v5.3.2 дополнение 2: имена в бэктиках/кавычках (живой прогон backender 28.10)
+await handlers["input"]({}, ctx);
+await handlers["message_update"](say("скиллы: `pohuy` — беру `pohuy` (по прямой инструкции владельца)."), ctx);
+const bash6 = (await handlers["tool_call"](
+  { toolName: "bash", input: { command: "omp --version" } },
+  ctx,
+)) as { block?: boolean } | undefined;
+const ok6 = bash6?.block !== true;
+console.log(`${ok6 ? "ok  " : "FAIL"} bash после «скиллы: \`pohuy\` — беру \`pohuy\`»: ${bash6?.block ? "ЗАБЛОКИРОВАН (бэктики ломают разбор)" : "пропущен"}`);
+const passed3 = [ok4, ok5, ok6].filter(Boolean).length;
+console.log(`доп. кейсы: ${passed3}/3`);
