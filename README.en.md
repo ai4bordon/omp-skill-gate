@@ -103,7 +103,6 @@ history/README-v1.md         first public release (v1.0)
 | v5.3 | background skills no longer wash the turn: list in `skill-gate.background.json` |
 | v5.3.1 | single R5 invariant: both quote forms searched only in tool outputs |
 | v5.3.2 | skill-choice line "skills: X — take X" is a legal declaration: background-only washes, a profile claim awaits read |
-| v5.3.1 | single R5 invariant: both quote forms searched only in tool outputs |
 
 Full history: `git log`. Spec with requirements and gates: [`specs/`](specs/).
 
