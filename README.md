@@ -5,7 +5,7 @@
 **Детерминированный контроль применения скиллов для агентов OMP**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v5.3.2-green.svg)](src/skill-gate.ts)
+[![Version](https://img.shields.io/badge/version-v5.4-green.svg)](src/skill-gate.ts)
 [![Runtime](https://img.shields.io/badge/runtime-Bun%20%7C%20OMP%20extension-orange.svg)](https://github.com/can1357/oh-my-pi)
 
 [English version](README.en.md) · [Документация](docs/) · [Спека](specs/)
@@ -83,11 +83,11 @@ bun probes/mass-check.ts ~/.omp/profiles/<ваш-профиль>/agent/skills
 ## Что внутри
 
 ```
-src/skill-gate.ts            расширение гейта (v5.3.2)
+src/skill-gate.ts            расширение гейта (v5.4)
 advisor/WATCHDOG.md          инструкция Советнику: роль, границы, лимит
 advisor/WATCHDOG.yml         подключение к OMP (--advisor)
 specs/                       requirements.md · design.md · tasks.md
-probes/                      пробы: obligations, quote, rx-fix, ref, bg-skill-gap
+probes/                      пробы: obligations, quote, rx-fix, ref, bg-skill-gap, toggle
 bench/                       стенд 20 промптов, сводки трёх проходов
 docs/                        gate.md · advisor.md · bench.md · history.md · reproduce.md
 history/README-v1.md         первая публичная версия (v1.0)
@@ -105,6 +105,7 @@ history/README-v1.md         первая публичная версия (v1.0)
 | v5.3 | фоновые скиллы не вымывают ход: список в `skill-gate.background.json` |
 | v5.3.1 | единый инвариант R5: обе формы цитат ищутся только в выводе инструментов |
 | v5.3.2 | строка выбора «скиллы: X — беру X» - легальная декларация: фон вымывает, заявка профильного ждёт read |
+| v5.4 | слэш-команда /skill-gate on/off/status: выключение гейта в сессии, состояние в замыкании |
 
 Точная история: `git log`. Спека с требованиями и гейтами: [`specs/`](specs/).
 

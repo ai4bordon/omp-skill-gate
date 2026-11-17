@@ -294,6 +294,7 @@ export default function skillGate(pi: ExtensionAPI): void {
   let statuses = new Map<string, Status>();
   let stopBlocks = 0; // отказов завершения в этом ходе (предохранитель)
   let stopGaveUp = false; // предохранитель сработал
+  let enabled = true; // R12: /skill-gate off выключает гейт до конца сессии или до on
 
   // FR-5: гейт только для главной сессии (ctx.agent.kind: "main" | "sub")
   const mainOnly = (ctx: ExtensionContext) => ctx.agent?.kind !== "sub";
@@ -422,7 +423,7 @@ export default function skillGate(pi: ExtensionAPI): void {
 
   // FR-1: блок действий, пока ход грязный; R2.1: сбор фактов для проверки доказательств
   pi.on("tool_call", (event, ctx) => {
-    if (!mainOnly(ctx)) return;
+    if (!mainOnly(ctx) || !enabled) return;
     const tn = event.toolName;
     const target = extractTarget(tn, event.input);
     const command = tn === "bash" ? (event.input as { command?: unknown } | undefined)?.command : undefined;
@@ -464,9 +465,8 @@ export default function skillGate(pi: ExtensionAPI): void {
     return { block: true, reason: BLOCK_REASON };
   });
 
-  // R4: запрет завершения, пока обязательства не закрыты или не доказаны
   pi.on("session_stop", (_event, ctx) => {
-    if (!mainOnly(ctx)) return;
+    if (!mainOnly(ctx) || !enabled) return;
     const { missing, unproven } = unresolved();
     if (missing.length === 0 && unproven.length === 0) return;
     if (stopBlocks >= STOP_BLOCK_LIMIT) {
@@ -493,9 +493,8 @@ export default function skillGate(pi: ExtensionAPI): void {
     };
   });
 
-  // FR-7: сводка по скиллам и обязательствам после ответа агента
   pi.on("agent_end", (_event, ctx) => {
-    if (!mainOnly(ctx)) return;
+    if (!mainOnly(ctx) || !enabled) return;
     const parts: string[] = [`блоков: ${blocksThisTurn}`];
     if (openSkills.length > 0) parts.push(`скиллы: ${openSkills.join(", ")}`);
     else if (declNoSkill) parts.push(`скиллов нет: ДЕКЛАРАЦИЯ, скилл не открыт${declReason ? ` (${declReason})` : ""}`);
@@ -520,23 +519,42 @@ export default function skillGate(pi: ExtensionAPI): void {
     ctx.ui.notify?.(`skill-gate: ${parts.join(" · ")}`, "info");
   });
 
-  // FR-8: статус
+  // FR-8/R12: статус и переключение. /skill-gate - состояние; on/off - режим;
+  // выключенный гейт молчит в agent_end (R12.6) и не блокирует инструменты и stop.
   pi.registerCommand("skill-gate", {
-    description: "skill-gate: состояние гейта, блоки за ход и всего, незакрытые обязательства",
-    handler: async (_args, ctx) => {
-      const { missing, unproven, selfEv, extEv } = unresolved();
-      const total = obligationsBySkill.reduce((n, g) => n + g.items.length, 0);
-      const tail =
-        total === 0
-          ? ""
-          : ` · обязательства ${total - missing.length - unproven.length}/${total}` +
-            (selfEv + extEv > 0 ? ` · доказательства: внешних ${extEv}, своих ${selfEv}` : "") +
-            (missing.length > 0 ? ` · без статуса: ${missing.join(" · ")}` : "") +
-            (unproven.length > 0 ? ` · без доказательства: ${unproven.join(" · ")}` : "");
-      ctx.ui.notify(
-        `skill-gate: ход ${dirty ? "dirty (нужен скилл или «скиллов нет»)" : "clean"} · blocked this turn: ${blocksThisTurn} · total: ${blocksTotal} · отказов завершения: ${stopBlocks}/${STOP_BLOCK_LIMIT}${tail}`,
-        "info",
-      );
+    description: "skill-gate: [on|off|status] выключение/включение гейта; без аргумента - состояние",
+    handler: async (args, ctx) => {
+      const arg = (args ?? "").trim().toLowerCase();
+      if (arg === "off") {
+        enabled = false;
+        ctx.ui.notify("skill-gate: ВЫКЛЮЧЕН до /skill-gate on или конца сессии. Блокировок и сводки не будет.", "info");
+        return;
+      }
+      if (arg === "on") {
+        enabled = true;
+        ctx.ui.notify(
+          `skill-gate: ВКЛЮЧЁН · ход ${dirty ? "dirty (нужен скилл или «скиллов нет»)" : "clean"} · обязательства и статистика хода сохранены`,
+          "info",
+        );
+        return;
+      }
+      if (arg === "status" || arg === "") {
+        const { missing, unproven, selfEv, extEv } = unresolved();
+        const total = obligationsBySkill.reduce((n, g) => n + g.items.length, 0);
+        const tail =
+          total === 0
+            ? ""
+            : ` · обязательства ${total - missing.length - unproven.length}/${total}` +
+              (selfEv + extEv > 0 ? ` · доказательства: внешних ${extEv}, своих ${selfEv}` : "") +
+              (missing.length > 0 ? ` · без статуса: ${missing.join(" · ")}` : "") +
+              (unproven.length > 0 ? ` · без доказательства: ${unproven.join(" · ")}` : "");
+        ctx.ui.notify(
+          `skill-gate: ${enabled ? "включён" : "ВЫКЛЮЧЕН"} · ход ${dirty ? "dirty (нужен скилл или «скиллов нет»)" : "clean"} · blocked this turn: ${blocksThisTurn} · total: ${blocksTotal} · отказов завершения: ${stopBlocks}/${STOP_BLOCK_LIMIT}${tail}`,
+          "info",
+        );
+        return;
+      }
+      ctx.ui.notify(`skill-gate: не понял «${arg}». Доступно: /skill-gate on | off | status (без аргумента = status).`, "warn");
     },
   });
 }
