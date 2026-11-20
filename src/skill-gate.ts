@@ -294,7 +294,10 @@ export default function skillGate(pi: ExtensionAPI): void {
   let statuses = new Map<string, Status>();
   let stopBlocks = 0; // отказов завершения в этом ходе (предохранитель)
   let stopGaveUp = false; // предохранитель сработал
-  let enabled = true; // R12: /skill-gate off выключает гейт до конца сессии или до on
+  // R12.4 (v5.5): сессия стартует с ВЫКЛЮЧЕННЫМ гейтом; /skill-gate on включает.
+  // Headless-режим (omp -p, стенд) не имеет слэш-команд: там гейт поднимают
+  // переменной окружения SKILL_GATE=1 (читается один раз при загрузке расширения).
+  let enabled = process.env.SKILL_GATE === "1" || process.env.SKILL_GATE === "on" || process.env.SKILL_GATE === "true";
 
   // FR-5: гейт только для главной сессии (ctx.agent.kind: "main" | "sub")
   const mainOnly = (ctx: ExtensionContext) => ctx.agent?.kind !== "sub";

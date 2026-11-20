@@ -50,6 +50,8 @@ async function boot(): Promise<Harness> {
   const handlers: Record<string, Handler> = {};
   const notes: string[] = [];
   let commandHandler: ((args: string, ctx: unknown) => unknown) | null = null;
+  // v5.5: сессия стартует выключенной; проба тестирует рабочий режим гейта,
+  // поэтому включает его явно, как это делает пользователь командой /skill-gate on.
   const ctx = { agent: { kind: "main" }, ui: { notify: (m: string) => notes.push(m) } };
 
   mod.default({
@@ -58,6 +60,7 @@ async function boot(): Promise<Harness> {
       commandHandler = spec.handler;
     },
   });
+  await commandHandler?.("on", ctx);
 
   return {
     notes,

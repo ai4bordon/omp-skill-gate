@@ -1,4 +1,5 @@
 """Прогоняет промпты стенда через omp -p --advisor, потоком в файл (без буфера в памяти)."""
+import os
 import subprocess
 import sys
 import time
@@ -37,6 +38,9 @@ def run_one(item: tuple[str, str, str]) -> tuple[str, int, float]:
             cwd=str(work),
             stdout=out,
             stderr=err,
+            # v5.5: гейт по умолчанию выключен; стенд меряет включённый гейт,
+            # поэтому SKILL_GATE=1 если переменная не задана явно.
+            env={**os.environ, "SKILL_GATE": os.environ.get("SKILL_GATE", "1")},
         )
         try:
             code = proc.wait(timeout=TIMEOUT)

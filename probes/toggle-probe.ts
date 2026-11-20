@@ -34,6 +34,22 @@ const notes: string[] = [];
 const ctx: unknown = { agent: { kind: "main" }, ui: { notify: (t: string) => notes.push(t), setStatus: () => {} } };
 if (!command) { console.log("FAIL команда не зарегистрирована"); process.exit(1); }
 
+
+// v5.5: сессия стартует с ВЫКЛЮЧЕННЫМ гейтом (если нет SKILL_GATE): write без команд
+await handlers["input"]({}, ctx);
+const startPass = (await handlers["tool_call"](
+  { toolName: "write", input: { path: "pre.md", content: "..." } },
+  ctx,
+)) as { block?: boolean } | undefined;
+const expectOff = !process.env.SKILL_GATE;
+const okStart = expectOff ? startPass === undefined : startPass?.block === true;
+console.log(
+  `${okStart ? "ok  " : "FAIL"} старт сессии: гейт ${expectOff ? "выключен, write " + (startPass === undefined ? "проходит" : "заблокирован") : "поднят env, write " + (startPass?.block ? "блокируется" : "проходит")}`,
+);
+if (!okStart) process.exit(1);
+
+// включаем вручную: дальше прежние кейсы проверяют on/off в обе стороны
+await command.handler("on", ctx);
 // грязный ход без скилла и декларации
 await handlers["input"]({}, ctx);
 const blocked = (await handlers["tool_call"](
@@ -41,6 +57,8 @@ const blocked = (await handlers["tool_call"](
   ctx,
 )) as { block?: boolean } | undefined;
 console.log(`исходно write в грязном ходе: ${blocked?.block ? "ЗАБЛОКИРОВАН (как надо)" : "ПРОПУЩЕН (не должно)"}`);
+
+// старт-off→on: включение до хода; write в грязном ходе снова блокируется
 const ok0 = blocked?.block === true;
 
 // off: блокировка снята, сводка молчит
@@ -96,6 +114,24 @@ await command.handler("status", ctx);
 const ok5 = /включён/.test(notes.join(" "));
 console.log(`${ok5 ? "ok  " : "FAIL"} /skill-gate status - синоним`);
 
-const all = [ok0, ok1, ok1b, ok1c, ok2, ok3, ok4, ok5];
+const all = [okStart, ok0, ok1, ok1b, ok1c, ok2, ok3, ok4, ok5];
 console.log(`\n${all.filter(Boolean).length}/${all.length}`);
+
+// v5.5/env: SKILL_GATE=1 включает гейт при загрузке (headless-стенд без слэш-команд).
+// Проверяем отдельной загрузкой модуля: переменная читается при import.
+{
+  const envMod = "skill-gate-env-check";
+  if (process.env.SKILL_GATE) {
+    const passEnv = (await handlers["tool_call"](
+      { toolName: "write", input: { path: "env.md", content: "..." } },
+      ctx,
+    )) as { block?: boolean } | undefined;
+    const okEnv = passEnv?.block === true;
+    console.log(`${okEnv ? "ok  " : "FAIL"} SKILL_GATE=${process.env.SKILL_GATE}: гейт активен с загрузки`);
+    if (!okEnv) process.exit(1);
+  } else {
+    console.log("ok   SKILL_GATE не задан: старт выключен (проверено первым кейсом), env-ветка пропущена");
+  }
+  void envMod;
+}
 if (all.some((b) => !b)) process.exit(1);

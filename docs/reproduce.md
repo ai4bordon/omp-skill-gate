@@ -19,6 +19,9 @@ echo '["имя-скилла"]' > ~/.omp/profiles/<ваш-профиль>/agent/e
 
 Начните новую сессию OMP: расширения подхватываются при старте.
 
+С v5.5 сессия стартует с ВЫКЛЮЧЕННЫМ гейтом. В TUI включите командой `/skill-gate on`;
+для headless-прогонов (стенд, `omp -p`) задайте `SKILL_GATE=1` в окружении.
+
 Проверка без модели и сети:
 
 ```bash
@@ -63,7 +66,7 @@ cp advisor/WATCHDOG.md advisor/WATCHDOG.yml ~/.omp/profiles/<ваш-профил
 ```bash
 mkdir /tmp/sg-check && cd /tmp/sg-check
 echo 'export function add(a, b) { return a + b; }' > calc.js
-omp -p --advisor "Добавь в calc.js функцию mul и покрой её тестом по TDD: сначала тест, потом код."
+SKILL_GATE=1 omp -p --advisor "Добавь в calc.js функцию mul и покрой её тестом по TDD: сначала тест, потом код."
 ```
 
 Ожидание: агент откроет скилл TDD (гейт не пустит без этого), напишет тест раньше кода,

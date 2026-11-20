@@ -5,7 +5,7 @@
 **Deterministic skill enforcement for OMP agents**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v5.4-green.svg)](src/skill-gate.ts)
+[![Version](https://img.shields.io/badge/version-v5.5-green.svg)](src/skill-gate.ts)
 [![Runtime](https://img.shields.io/badge/runtime-Bun%20%7C%20OMP%20extension-orange.svg)](https://github.com/can1357/oh-my-pi)
 
 [Русская версия](README.md) · [Docs](docs/) · [Spec](specs/)
@@ -81,7 +81,7 @@ New OMP sessions pick the extension up at start. Cases that need locally install
 ## Repository layout
 
 ```
-src/skill-gate.ts            the gate extension (v5.4)
+src/skill-gate.ts            the gate extension (v5.5)
 advisor/WATCHDOG.md          Advisor instructions: role, boundaries, limits
 advisor/WATCHDOG.yml         OMP wiring (--advisor)
 specs/                       requirements.md · design.md · tasks.md
@@ -104,6 +104,7 @@ history/README-v1.md         first public release (v1.0)
 | v5.3.1 | single R5 invariant: both quote forms searched only in tool outputs |
 | v5.3.2 | skill-choice line "skills: X — take X" is a legal declaration: background-only washes, a profile claim awaits read |
 | v5.4 | slash command /skill-gate on/off/status: turn the gate off in a session, state lives in the closure |
+| v5.5 | default: session starts with the gate off, enable via /skill-gate on |
 
 Full history: `git log`. Spec with requirements and gates: [`specs/`](specs/).
 

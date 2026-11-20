@@ -4,3 +4,4 @@ bench/2*/
 bench/results/*.json.tmp
 skill-gate.background.json
 src/skill-gate.background.json
+bench/__pycache__/
