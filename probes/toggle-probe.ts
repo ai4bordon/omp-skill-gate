@@ -35,13 +35,16 @@ const ctx: unknown = { agent: { kind: "main" }, ui: { notify: (t: string) => not
 if (!command) { console.log("FAIL команда не зарегистрирована"); process.exit(1); }
 
 
-// v5.5: сессия стартует с ВЫКЛЮЧЕННЫМ гейтом (если нет SKILL_GATE): write без команд
+// v5.5: сессия стартует с ВЫКЛЮЧЕННЫМ гейтом: write без команд.
+// Включение - тот же предикат, что в коде (R12.10): только 1|on|true,
+// иначе SKILL_GATE=0 (рекомендован в bench/README и D12) ронял бы пробу.
+const envOn = /^(1|on|true)$/.test(process.env.SKILL_GATE ?? "");
+const expectOff = !envOn;
 await handlers["input"]({}, ctx);
 const startPass = (await handlers["tool_call"](
   { toolName: "write", input: { path: "pre.md", content: "..." } },
   ctx,
 )) as { block?: boolean } | undefined;
-const expectOff = !process.env.SKILL_GATE;
 const okStart = expectOff ? startPass === undefined : startPass?.block === true;
 console.log(
   `${okStart ? "ok  " : "FAIL"} старт сессии: гейт ${expectOff ? "выключен, write " + (startPass === undefined ? "проходит" : "заблокирован") : "поднят env, write " + (startPass?.block ? "блокируется" : "проходит")}`,
@@ -117,21 +120,30 @@ console.log(`${ok5 ? "ok  " : "FAIL"} /skill-gate status - синоним`);
 const all = [okStart, ok0, ok1, ok1b, ok1c, ok2, ok3, ok4, ok5];
 console.log(`\n${all.filter(Boolean).length}/${all.length}`);
 
-// v5.5/env: SKILL_GATE=1 включает гейт при загрузке (headless-стенд без слэш-команд).
-// Проверяем отдельной загрузкой модуля: переменная читается при import.
+// v5.5/env: SKILL_GATE=1|on|true включает гейт при загрузке (headless-стенд без
+// слэш-команд), SKILL_GATE=0 оставляет выключенным. Предикат - как в коде (R12.10).
+// Кейсы выше уже включали гейт командами, поэтому старт проверяем на СВЕЖЕЙ копии:
+// новый путь = новый модуль, переменная читается при import.
 {
-  const envMod = "skill-gate-env-check";
-  if (process.env.SKILL_GATE) {
-    const passEnv = (await handlers["tool_call"](
-      { toolName: "write", input: { path: "env.md", content: "..." } },
-      ctx,
-    )) as { block?: boolean } | undefined;
+  const freshPath = join(work, "m-env.ts");
+  writeFileSync(freshPath, readFileSync(EXT, "utf8"));
+  const freshMod = (await import(pathToFileURL(freshPath).href)) as { default: (pi: Pi) => void };
+  const fh: Record<string, (e: unknown, c: unknown) => unknown> = {};
+  freshMod.default({ on: (ev, fn) => { fh[ev] = fn; }, registerCommand: () => {} });
+  await fh["input"]({}, ctx);
+  const passEnv = (await fh["tool_call"](
+    { toolName: "write", input: { path: "env.md", content: "..." } },
+    ctx,
+  )) as { block?: boolean } | undefined;
+  const label = process.env.SKILL_GATE ?? "(не задан)";
+  if (envOn) {
     const okEnv = passEnv?.block === true;
-    console.log(`${okEnv ? "ok  " : "FAIL"} SKILL_GATE=${process.env.SKILL_GATE}: гейт активен с загрузки`);
+    console.log(`${okEnv ? "ok  " : "FAIL"} SKILL_GATE=${label}: гейт активен с загрузки`);
     if (!okEnv) process.exit(1);
   } else {
-    console.log("ok   SKILL_GATE не задан: старт выключен (проверено первым кейсом), env-ветка пропущена");
+    const okEnv0 = passEnv === undefined;
+    console.log(`${okEnv0 ? "ok  " : "FAIL"} SKILL_GATE=${label}: гейт выключен с загрузки`);
+    if (!okEnv0) process.exit(1);
   }
-  void envMod;
 }
 if (all.some((b) => !b)) process.exit(1);
